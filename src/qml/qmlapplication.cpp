@@ -1,5 +1,6 @@
 #include "qmlapplication.h"
 
+#include <QIcon>
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QLocale>
@@ -171,6 +172,11 @@ QmlApplication::QmlApplication(
         m_openDecksControls.push_back(std::make_unique<ControlObject>(
                 ConfigKey(openDecks, QStringLiteral("vinyl%1").arg(deck))));
     }
+
+    // Open Decks fork: the window / taskbar icon (the classic UI sets its own
+    // from the compiled-in resource; the QML app reads the resource tree).
+    app->setWindowIcon(QIcon(m_pCoreServices->getSettings()->getResourcePath() +
+            QStringLiteral("images/icons/scalable/apps/mixxx.svg")));
 
     m_loadSucceeded = loadQml(m_mainFilePath);
     if (!m_loadSucceeded) {

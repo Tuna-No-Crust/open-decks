@@ -21,3 +21,12 @@ Run from the repository root. The volume keeps the downloaded dependency
 bundle, the build tree and ccache, so later builds take minutes. The
 dependency bundle is the one upstream's `tools/appimage_buildenv.sh` names,
 downloaded from downloads.mixxx.org.
+
+## Steam artwork
+
+`steam-art/` holds covers for the non-Steam shortcut: copy them into
+`~/.steam/steam/userdata/<your id>/config/grid/` named after the shortcut's
+app id (`<appid>p.png` portrait, `<appid>.png` wide, `<appid>_hero.png`,
+`<appid>_logo.png`, `<appid>_icon.png`). Steam shows the id in its logs
+(`console-linux.txt`, "AppId"), or use Decky's SteamGridDB plugin to set
+them by hand.
