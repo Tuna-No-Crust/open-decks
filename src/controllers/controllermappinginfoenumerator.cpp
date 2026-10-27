@@ -39,6 +39,8 @@ QList<MappingInfo> MappingInfoEnumerator::getMappingsByExtension(const QString& 
         return m_hidMappings;
     } else if (extension == BULK_MAPPING_EXTENSION) {
         return m_bulkMappings;
+    } else if (extension == GAMEPAD_MAPPING_EXTENSION) {
+        return m_gamepadMappings;
     }
 
     qDebug() << "Extension not registered to mappinginfo" << extension;
@@ -49,6 +51,7 @@ void MappingInfoEnumerator::loadSupportedMappings() {
     m_midiMappings.clear();
     m_hidMappings.clear();
     m_bulkMappings.clear();
+    m_gamepadMappings.clear();
 
     for (const QString& dirPath : std::as_const(m_controllerDirPaths)) {
         QDirIterator it(dirPath);
@@ -63,6 +66,8 @@ void MappingInfoEnumerator::loadSupportedMappings() {
                 m_hidMappings.append(MappingInfo(fileInfo));
             } else if (path.endsWith(BULK_MAPPING_EXTENSION, Qt::CaseInsensitive)) {
                 m_bulkMappings.append(MappingInfo(fileInfo));
+            } else if (path.endsWith(GAMEPAD_MAPPING_EXTENSION, Qt::CaseInsensitive)) {
+                m_gamepadMappings.append(MappingInfo(fileInfo));
             }
         }
     }
@@ -70,6 +75,7 @@ void MappingInfoEnumerator::loadSupportedMappings() {
     std::sort(m_midiMappings.begin(), m_midiMappings.end(), mappingInfoNameComparator);
     std::sort(m_hidMappings.begin(), m_hidMappings.end(), mappingInfoNameComparator);
     std::sort(m_bulkMappings.begin(), m_bulkMappings.end(), mappingInfoNameComparator);
+    std::sort(m_gamepadMappings.begin(), m_gamepadMappings.end(), mappingInfoNameComparator);
 
     qDebug() << "Extension" << MIDI_MAPPING_EXTENSION << "total"
              << m_midiMappings.length() << "mappings";

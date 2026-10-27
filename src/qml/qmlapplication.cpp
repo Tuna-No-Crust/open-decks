@@ -155,6 +155,23 @@ QmlApplication::QmlApplication(
             mixxx::OverviewType::RGB);
     m_pWaveformOverviewType->forceSet(static_cast<double>(overviewType));
 
+    const QString openDecks = QStringLiteral("[OpenDecks]");
+    m_pOpenDecksFocus = std::make_unique<ControlObject>(ConfigKey(openDecks, QStringLiteral("focus")));
+    m_pOpenDecksTab = std::make_unique<ControlObject>(ConfigKey(openDecks, QStringLiteral("tab")));
+    m_pOpenDecksTabNext = std::make_unique<ControlPushButton>(ConfigKey(openDecks, QStringLiteral("tab_next")));
+    m_pOpenDecksTabPrev = std::make_unique<ControlPushButton>(ConfigKey(openDecks, QStringLiteral("tab_prev")));
+    for (int deck = 1; deck <= 2; ++deck) {
+        const QString prefix = QStringLiteral("fx%1_").arg(deck);
+        for (const char* suffix : {"touch", "x", "y"}) {
+            m_openDecksControls.push_back(std::make_unique<ControlObject>(
+                    ConfigKey(openDecks, prefix + QLatin1String(suffix))));
+        }
+        // Jog vinyl mode (scratch instead of nudge while playing) for deck N:
+        // a badge on the touch UI toggles it, the gamepad mapping follows it.
+        m_openDecksControls.push_back(std::make_unique<ControlObject>(
+                ConfigKey(openDecks, QStringLiteral("vinyl%1").arg(deck))));
+    }
+
     m_loadSucceeded = loadQml(m_mainFilePath);
     if (!m_loadSucceeded) {
         return;

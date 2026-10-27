@@ -127,6 +127,16 @@ MappingInfo::MappingInfo(const QFileInfo& fileInfo) {
                         product = parseHIDProduct(xml.attributes());
                     } else if (protocol == QStringLiteral("bulk")) {
                         product = parseBulkProduct(xml.attributes());
+                    } else if (protocol == QStringLiteral("gamepad")) {
+                        // <product protocol="gamepad"/> matches every pad;
+                        // vendor_id/product_id (hex) narrow it down.
+                        product.protocol = protocol.toString();
+                        product.vendor_id = xmlElementAttributes
+                                                    .value(QStringLiteral("vendor_id"))
+                                                    .toString();
+                        product.product_id = xmlElementAttributes
+                                                     .value(QStringLiteral("product_id"))
+                                                     .toString();
                     } else if (protocol == QStringLiteral("midi")) {
                         qCInfo(kLogger) << "MIDI product info parsing not yet implemented";
                     } else {

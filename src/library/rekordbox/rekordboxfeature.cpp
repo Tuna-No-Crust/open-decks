@@ -1,10 +1,15 @@
 #include "library/rekordbox/rekordboxfeature.h"
 
+#include "track/keyutils.h"
+
+#include <QMutex>
+
 #include <mp3guessenc.h>
 #include <rekordbox_anlz.h>
 #include <rekordbox_pdb.h>
 
 #include <QDir>
+#include <QSet>
 #include <QMap>
 #include <QMessageBox>
 #include <QSettings>
@@ -114,7 +119,13 @@ bool createLibraryTable(QSqlDatabase& database, const QString& tableName) {
             "    rating INTEGER,"
             "    analyze_path TEXT UNIQUE,"
             "    device TEXT,"
-            "    color INTEGER"
+            "    color INTEGER,"
+            "    hotcue_count INTEGER,"
+            "    memcue_count INTEGER,"
+            // Mixxx's ChromaticKey for the key text: the library's key sort is
+            // an ORDER BY CASE over this column (ColumnCache), and the query
+            // fails on any table that has "key" without "key_id".
+            "    key_id INTEGER"
             ");");
 
     if (!query.exec()) {
@@ -183,6 +194,11 @@ bool dropTable(QSqlDatabase& database, const QString& tableName) {
 // The returned list owns the pointers, but we can't use a unique_ptr because
 // the result is passed by a const reference inside QFuture and than copied
 // to the main thread requiring a copy-able object.
+// Folders holding a rekordbox export that are not mounted volumes (copies on
+// internal storage), set from the QML UI. Guarded: read on the worker thread.
+QMutex s_extraDeviceFoldersMutex;
+QStringList s_extraDeviceFolders;
+
 QList<TreeItem*> findRekordboxDevices() {
     QThread* thisThread = QThread::currentThread();
     thisThread->setPriority(QThread::LowPriority);
@@ -258,6 +274,28 @@ QList<TreeItem*> findRekordboxDevices() {
         }
     }
 #endif
+
+    QStringList extraFolders;
+    {
+        QMutexLocker lock(&s_extraDeviceFoldersMutex);
+        extraFolders = s_extraDeviceFolders;
+    }
+    QSet<QString> seen;
+    for (const TreeItem* pItem : std::as_const(foundDevices)) {
+        seen.insert(QFileInfo(pItem->getData().toList().value(0).toString()).canonicalFilePath());
+    }
+    for (const QString& folder : extraFolders) {
+        QFileInfo info(folder);
+        // A mount point the mounter reports is usually also found above.
+        if (seen.contains(info.canonicalFilePath())) {
+            continue;
+        }
+        if (info.isDir() && !findRekordboxPdbPath(info.filePath()).isEmpty()) {
+            foundDevices << new TreeItem(
+                    info.fileName(),
+                    QVariant(QList<QString>{info.filePath(), IS_RECORDBOX_DEVICE}));
+        }
+    }
 
     return foundDevices;
 }
@@ -361,6 +399,65 @@ mixxx::RgbColor colorFromID(int colorID) {
     return kColorForIDNoColor;
 }
 
+struct CueCounts {
+    int hotCues = 0;
+    int memoryCues = 0;
+};
+
+// How many hot cues and memory cues/loops a track's ANLZ files hold, so the
+// library can show it without loading the track. The .EXT file's extended
+// cue list supersedes the .DAT one when present (same rule as readAnalyze).
+CueCounts countCues(const QString& anlzDatPath) {
+    CueCounts counts;
+    QString path = anlzDatPath;
+    const QString extPath = anlzDatPath.left(anlzDatPath.length() - 3) + QStringLiteral("EXT");
+    if (QFile(extPath).exists()) {
+        path = extPath;
+    } else if (!QFile(path).exists()) {
+        return counts;
+    }
+    try {
+        std::ifstream ifs(path.toStdString(), std::ifstream::binary);
+        kaitai::kstream ks(&ifs);
+        rekordbox_anlz_t anlz = rekordbox_anlz_t(&ks);
+        int hot = 0;
+        int memory = 0;
+        bool sawExtended = false;
+        int hotBasic = 0;
+        int memoryBasic = 0;
+        for (const auto& section : *anlz.sections()) {
+            switch (section->fourcc()) {
+            case rekordbox_anlz_t::SECTION_TAGS_CUES: {
+                auto* cuesTag = static_cast<rekordbox_anlz_t::cue_tag_t*>(section->body());
+                const int n = static_cast<int>(cuesTag->cues()->size());
+                if (cuesTag->type() == rekordbox_anlz_t::CUE_LIST_TYPE_HOT_CUES) {
+                    hotBasic += n;
+                } else {
+                    memoryBasic += n;
+                }
+            } break;
+            case rekordbox_anlz_t::SECTION_TAGS_CUES_2: {
+                sawExtended = true;
+                auto* cuesTag = static_cast<rekordbox_anlz_t::cue_extended_tag_t*>(section->body());
+                const int n = static_cast<int>(cuesTag->cues()->size());
+                if (cuesTag->type() == rekordbox_anlz_t::CUE_LIST_TYPE_HOT_CUES) {
+                    hot += n;
+                } else {
+                    memory += n;
+                }
+            } break;
+            default:
+                break;
+            }
+        }
+        counts.hotCues = sawExtended ? hot : hotBasic;
+        counts.memoryCues = sawExtended ? memory : memoryBasic;
+    } catch (const std::exception& e) {
+        qWarning() << "Rekordbox: could not count cues in" << path << e.what();
+    }
+    return counts;
+}
+
 void insertTrack(
         QSqlDatabase& database,
         rekordbox_pdb_t::track_row_t* track,
@@ -401,6 +498,8 @@ void insertTrack(
     query.bindValue(":comment", comment);
     query.bindValue(":tracknumber", tracknumber);
     query.bindValue(":key", key);
+    query.bindValue(":key_id",
+            static_cast<int>(KeyUtils::guessKeyFromText(key)));
     query.bindValue(":bpm", bpm);
     query.bindValue(":bitrate", bitrate);
     query.bindValue(":analyze_path", anlzPath);
@@ -408,6 +507,9 @@ void insertTrack(
     query.bindValue(":color",
             mixxx::RgbColor::toQVariant(
                     colorFromID(static_cast<int>(track->color_id()))));
+    const CueCounts cueCounts = countCues(anlzPath);
+    query.bindValue(":hotcue_count", cueCounts.hotCues);
+    query.bindValue(":memcue_count", cueCounts.memoryCues);
 
     if (!query.exec()) {
         LOG_FAILED_QUERY(query);
@@ -485,10 +587,12 @@ QString parseDeviceDB(mixxx::DbConnectionPoolPtr dbConnectionPool, TreeItem* dev
     query.prepare("INSERT INTO " + kRekordboxLibraryTable +
             " (rb_id, artist, title, album, year,"
             "genre,comment,tracknumber,bpm, bitrate,duration, location,"
-            "rating,key,analyze_path,device,color) VALUES (:rb_id, :artist, "
+            "rating,key,analyze_path,device,color,hotcue_count,memcue_count,key_id)"
+            " VALUES (:rb_id, :artist, "
             ":title, :album, :year,:genre,"
             ":comment, :tracknumber,:bpm, :bitrate,:duration, :location,"
-            ":rating,:key,:analyze_path,:device,:color)");
+            ":rating,:key,:analyze_path,:device,:color,:hotcue_count,:memcue_count,"
+            ":key_id)");
 
     int audioFilesCount = 0;
 
@@ -915,6 +1019,9 @@ void readAnalyze(TrackPointer track,
                             section->body());
 
             QVector<mixxx::audio::FramePos> beats;
+            // Tempo in hundredths of a BPM, while every beat agrees on it.
+            std::optional<int> constTempo;
+            bool tempoVaries = false;
 
             for (const auto& beat : *beatGridTag->beats()) {
                 int time = static_cast<int>(beat->time()) - timingOffset;
@@ -923,12 +1030,32 @@ void readAnalyze(TrackPointer track,
                     time = 1;
                 }
                 beats << mixxx::audio::FramePos(sampleRateKhz * static_cast<double>(time));
+                const int tempo = static_cast<int>(beat->tempo());
+                if (!constTempo) {
+                    constTempo = tempo;
+                } else if (*constTempo != tempo) {
+                    tempoVaries = true;
+                }
             }
 
-            const auto pBeats = mixxx::Beats::fromBeatPositions(
-                    sampleRate,
-                    beats,
-                    mixxx::rekordboxconstants::beatsSubversion);
+            // rekordbox stores beat times in whole milliseconds, so even a
+            // constant-tempo grid alternates e.g. 428/429 ms at 140 BPM; as a
+            // beat-by-beat map that shows up as a BPM wobbling around the real
+            // value. When rekordbox gives every beat the same tempo, rebuild
+            // the constant grid it describes from the first beat instead.
+            mixxx::BeatsPointer pBeats;
+            if (!beats.isEmpty() && constTempo && *constTempo > 0 && !tempoVaries) {
+                pBeats = mixxx::Beats::fromConstTempo(
+                        sampleRate,
+                        beats.first(),
+                        mixxx::Bpm(*constTempo / 100.0),
+                        mixxx::rekordboxconstants::beatsSubversion);
+            } else {
+                pBeats = mixxx::Beats::fromBeatPositions(
+                        sampleRate,
+                        beats,
+                        mixxx::rekordboxconstants::beatsSubversion);
+            }
             track->trySetBeats(pBeats);
         } break;
         case rekordbox_anlz_t::SECTION_TAGS_CUES: {
@@ -1343,7 +1470,9 @@ RekordboxFeature::RekordboxFeature(
             LIBRARYTABLE_BPM,
             LIBRARYTABLE_KEY,
             LIBRARYTABLE_COLOR,
-            REKORDBOX_ANALYZE_PATH};
+            REKORDBOX_ANALYZE_PATH,
+            QStringLiteral("hotcue_count"),
+            QStringLiteral("memcue_count")};
 
     const QStringList searchColumns = {
             LIBRARYTABLE_ARTIST,
@@ -1493,6 +1622,12 @@ QString RekordboxFeature::formatRootViewHtml() const {
 }
 
 void RekordboxFeature::refreshLibraryModels() {
+}
+
+// static
+void RekordboxFeature::setExtraDeviceFolders(const QStringList& folders) {
+    QMutexLocker lock(&s_extraDeviceFoldersMutex);
+    s_extraDeviceFolders = folders;
 }
 
 void RekordboxFeature::activate() {

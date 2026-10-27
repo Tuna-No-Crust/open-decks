@@ -66,6 +66,10 @@ class RekordboxFeature : public BaseExternalLibraryFeature {
 
     TreeItemModel* sidebarModel() const override;
 
+    /// Folders (not mounted volumes) that also hold a rekordbox export, e.g.
+    /// copies on internal storage; picked up by the next activate().
+    static void setExtraDeviceFolders(const QStringList& folders);
+
   public slots:
     void activate() override;
     void activateChild(const QModelIndex& index) override;

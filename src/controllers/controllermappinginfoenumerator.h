@@ -23,4 +23,5 @@ class MappingInfoEnumerator {
     QList<MappingInfo> m_hidMappings;
     QList<MappingInfo> m_midiMappings;
     QList<MappingInfo> m_bulkMappings;
+    QList<MappingInfo> m_gamepadMappings;
 };

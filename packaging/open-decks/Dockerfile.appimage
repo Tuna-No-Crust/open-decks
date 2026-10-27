@@ -1,0 +1,83 @@
+# Linux x86_64 AppImage toolchain for Open Decks (Steam Deck target).
+# Mirrors upstream CI's "AppImage Linux x86_64" job (tools/appimage_buildenv.sh,
+# .github/workflows/build.yml): Ubuntu 22.04 for the glibc 2.35 baseline,
+# CMake >= 4.2 for CPack's AppImage generator, appimagetool 1.9.1.
+# Adds SDL3 (not in Mixxx's prebuilt deps), built static so the gamepad
+# backend is compiled into mixxx and nothing extra needs bundling.
+FROM ubuntu:22.04
+
+ARG CMAKE_VERSION=4.2.3
+ARG CMAKE_SHA256=5bb505d5e0cca0480a330f7f27ccf52c2b8b5214c5bba97df08899f5ef650c23
+ARG SDL_VERSION=3.4.12
+ARG SDL_SHA256=f07b958a9ac5020fb7a44cadb957f658b2149c3c8abb4f63145fac9303249db7
+ARG APPIMAGETOOL_SHA256=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Package list from tools/appimage_buildenv.sh, plus git/curl/zip for vcpkg
+# and libpipewire for the smoke test (the AppImage excludes it on purpose).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl git zip unzip python3 build-essential \
+        ccache g++ make pkg-config patchelf file desktop-file-utils libfuse2 \
+        squashfs-tools libsecret-1-dev libgcrypt20-dev libgpg-error-dev \
+        libgl1-mesa-dev libx11-xcb-dev libglu1-mesa-dev libxrender-dev \
+        libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libegl1-mesa-dev \
+        libupower-glib-dev libsm-dev libxrandr-dev libxext-dev libudev-dev \
+        libxcb1-dev libxcb-cursor-dev libxcb-glx0-dev libxcb-icccm4-dev \
+        libxcb-image0-dev libxcb-keysyms1-dev libxcb-randr0-dev \
+        libxcb-render0-dev libxcb-render-util0-dev libxcb-shape0-dev \
+        libxcb-shm0-dev libxcb-sync-dev libxcb-util-dev libxcb-xfixes0-dev \
+        libxcb-xkb-dev libxcb-xinput-dev libpipewire-0.3-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSLo /tmp/cmake.tgz \
+        "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" \
+    && echo "${CMAKE_SHA256}  /tmp/cmake.tgz" | sha256sum -c - \
+    && tar -xzf /tmp/cmake.tgz -C /opt \
+    && ln -s /opt/cmake-${CMAKE_VERSION}-linux-x86_64/bin/* /usr/local/bin/ \
+    && rm /tmp/cmake.tgz
+
+# SDL3, gamepad/joystick parts only: no video, audio, render, GPU or camera.
+# udev + hidraw give hotplug and SDL's HIDAPI drivers (Steam Deck, DualSense).
+# SDL refuses a Linux build without X11/Wayland unless SDL_UNIX_CONSOLE_BUILD
+# says windows really aren't wanted (docs/README-cmake.md).
+RUN curl -fsSLo /tmp/sdl.tgz \
+        "https://github.com/libsdl-org/SDL/releases/download/release-${SDL_VERSION}/SDL3-${SDL_VERSION}.tar.gz" \
+    && echo "${SDL_SHA256}  /tmp/sdl.tgz" | sha256sum -c - \
+    && tar -xzf /tmp/sdl.tgz -C /tmp \
+    && cmake -S /tmp/SDL3-${SDL_VERSION} -B /tmp/sdl-build -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/opt/sdl3 -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DSDL_STATIC=ON -DSDL_SHARED=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF \
+        -DSDL_VIDEO=OFF -DSDL_RENDER=OFF -DSDL_AUDIO=OFF -DSDL_GPU=OFF \
+        -DSDL_CAMERA=OFF -DSDL_JOYSTICK=ON -DSDL_HAPTIC=ON -DSDL_HIDAPI=ON \
+        -DSDL_UNIX_CONSOLE_BUILD=ON \
+    && cmake --build /tmp/sdl-build --parallel \
+    && cmake --install /tmp/sdl-build \
+    && rm -rf /tmp/sdl.tgz /tmp/SDL3-${SDL_VERSION} /tmp/sdl-build
+
+# appimagetool is itself an AppImage. Under x86 emulation (Docker Desktop's
+# Rosetta/binfmt on Apple silicon) the AppImage magic bytes at ELF offset 8
+# ("AI\x02") make the loader reject it and the shell then runs it as a
+# script ("ELFAI: not found"). Blank those three bytes -- it is then a plain
+# ELF -- unpack it once and call its AppRun.
+RUN curl -fsSLo /tmp/appimagetool \
+        https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage \
+    && echo "${APPIMAGETOOL_SHA256}  /tmp/appimagetool" | sha256sum -c - \
+    && chmod +x /tmp/appimagetool \
+    && printf '\000\000\000' | dd of=/tmp/appimagetool bs=1 seek=8 count=3 conv=notrunc 2>/dev/null \
+    && cd /opt && /tmp/appimagetool --appimage-extract >/dev/null \
+    && mv /opt/squashfs-root /opt/appimagetool \
+    && ln -s /opt/appimagetool/AppRun /usr/local/bin/appimagetool \
+    && rm /tmp/appimagetool \
+    && appimagetool --version
+
+# ubuntu:22.04 has no uid-1000 user; create abi so /work stays owned by abi.
+RUN groupadd -g 1000 abi && useradd -m -u 1000 -g 1000 abi
+
+# No FUSE inside a container: run appimagetool (and test AppImages) extracted.
+ENV APPIMAGE_EXTRACT_AND_RUN=1
+USER abi
+ENV BUILDENV_BASEPATH=/work/buildenv
+ENV CCACHE_DIR=/work/ccache
+WORKDIR /work/src
+CMD ["bash"]

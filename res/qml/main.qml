@@ -1,4 +1,5 @@
 import "." as Skin
+import "OpenDecks" as OD
 import Mixxx 1.0 as Mixxx
 import QtQuick 2.12
 import QtQuick.Controls
@@ -9,10 +10,12 @@ ApplicationWindow {
     id: root
 
     readonly property bool isMobile: Qt.platform.os === "android" || Qt.platform.os === "ios"
-    readonly property int designWidth: 1792
-    readonly property int designHeight: 1008
+    // The handheld touch UI is designed at the Steam Deck's 1280x800.
+    readonly property int designWidth: 1280
+    readonly property int designHeight: 800
 
     color: Theme.backgroundColor
+    title: "Open Decks"
     height: isMobile ? Screen.height : designHeight
     menuBar: content.item ? content.item.menuBar : null
     minimumHeight: isMobile ? 0 : 300
@@ -51,8 +54,10 @@ ApplicationWindow {
                 Qt.quit()
             }
         }
+        // Our handheld UI (res/qml/OpenDecks) in place of upstream's MainWindow,
+        // which stays in the tree for reference.
         sourceComponent: Component {
-            MainWindow {
+            OD.AppShell {
                 applicationWindow: root
             }
         }

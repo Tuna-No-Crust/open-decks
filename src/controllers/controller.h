@@ -22,7 +22,8 @@ enum class PhysicalTransportProtocol {
 enum class DataRepresentationProtocol {
     MIDI,
     HID,
-    USB_BULK_TRANSFER // Bulk is only one of the 4 USB transfer modes
+    USB_BULK_TRANSFER, // Bulk is only one of the 4 USB transfer modes
+    GAMEPAD            // OS game controller API (SDL), normalised layout
 };
 
 /// This is a base class representing a physical (or software) controller.  It
@@ -43,6 +44,11 @@ class Controller : public QObject {
     /// used by the ControllerManager to display only relevant mapping files for
     /// the controller (type.)
     virtual QString mappingExtension() = 0;
+    /// Mapping file name used when the user hasn't configured this device,
+    /// which then opens without any setup. Empty means stay disabled.
+    virtual QString defaultMappingFile() const {
+        return QString();
+    }
 
     virtual void setMapping(std::shared_ptr<LegacyControllerMapping> pMapping) = 0;
     std::shared_ptr<LegacyControllerMapping> getMapping() {

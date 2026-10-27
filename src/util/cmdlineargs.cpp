@@ -305,6 +305,15 @@ bool CmdlineArgs::parse(const QStringList& arguments, CmdlineArgs::ParseMode mod
     qmlDeprecated.setFlags(QCommandLineOption::HiddenFromHelp);
     parser.addOption(qmlDeprecated);
     parser.addOption(qml);
+    // Open Decks fork: the touch UI is the default; --classic-ui brings back
+    // upstream's widget UI (diagnosis only). --new-ui stays accepted.
+    const QCommandLineOption classicUi(QStringLiteral("classic-ui"),
+            forUserFeedback
+                    ? QCoreApplication::translate("CmdlineArgs",
+                              "Loads Mixxx's classic widget interface instead "
+                              "of the Open Decks touch UI.")
+                    : QString());
+    parser.addOption(classicUi);
     const QCommandLineOption awareOfRisk(
             QStringLiteral("allow-dangerous-data-corruption-risk"),
             forUserFeedback
@@ -479,7 +488,7 @@ bool CmdlineArgs::parse(const QStringList& arguments, CmdlineArgs::ParseMode mod
     m_developer = parser.isSet(developer);
     m_stats = parser.isSet(stats);
 #ifdef MIXXX_USE_QML
-    m_qml = parser.isSet(qml);
+    m_qml = !parser.isSet(classicUi);
     if (parser.isSet(qmlDeprecated)) {
         m_qml |= true;
         qWarning() << "The argument '--qml' is deprecated and will be soon "

@@ -22,6 +22,7 @@ class ControlObject;
 class CrateFeature;
 class LibraryControl;
 class LibraryFeature;
+class RekordboxFeature;
 class LibraryTableModel;
 class KeyboardEventFilter;
 class MixxxLibraryFeature;
@@ -73,6 +74,11 @@ class Library: public QObject {
                     KeyboardEventFilter* pKeyboard);
 
     void addFeature(LibraryFeature* feature);
+
+    /// The rekordbox feature, or nullptr when disabled in the settings.
+    RekordboxFeature* rekordboxFeature() const {
+        return m_pRekordboxFeature;
+    }
 
     /// Needed for exposing models to QML
     LibraryTableModel* trackTableModel() const;
@@ -195,6 +201,8 @@ class Library: public QObject {
     parented_ptr<LibraryControl> m_pLibraryControl;
 
     QList<LibraryFeature*> m_features;
+    // The rekordbox feature (if enabled), for the QML touch UI's library.
+    RekordboxFeature* m_pRekordboxFeature{nullptr};
     const static QString m_sTrackViewName;
     WLibrary* m_pLibraryWidget;
     parented_ptr<MixxxLibraryFeature> m_pMixxxLibraryFeature;

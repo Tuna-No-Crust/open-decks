@@ -212,7 +212,8 @@ Library::Library(
     // periodically. Not ideal performance wise.
     if (m_pConfig->getValue(
                 ConfigKey(kConfigGroup, "ShowRekordboxLibrary"), true)) {
-        addFeature(new RekordboxFeature(this, m_pConfig));
+        m_pRekordboxFeature = new RekordboxFeature(this, m_pConfig);
+        addFeature(m_pRekordboxFeature);
     }
 
     if (m_pConfig->getValue(

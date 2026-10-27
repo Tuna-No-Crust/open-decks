@@ -159,6 +159,10 @@ class QmlSoundManagerProxy : public QObject {
 
     std::shared_ptr<SoundManager> internal() const;
     Q_INVOKABLE void commit();
+    // [OpenDecks] Re-enumerate the sound devices (a USB interface plugged in
+    // after start). Closes the open devices first, so audio stops until the
+    // next commit() — the touch settings screen commits right after.
+    Q_INVOKABLE void rescanDevices();
 
     static QmlSoundManagerProxy* create(QQmlEngine* pQmlEngine, QJSEngine* pJsEngine);
     static void registerManager(std::shared_ptr<SoundManager> pManager) {

@@ -1,0 +1,5 @@
+singleton Tokens 1.0 Tokens.qml
+singleton UiState 1.0 UiState.qml
+singleton FxCatalog 1.0 FxCatalog.qml
+PflButton 1.0 PflButton.qml
+CueLevel 1.0 CueLevel.qml

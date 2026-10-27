@@ -521,6 +521,12 @@ bool QmlControllerDeviceProxy::save(const QmlConfigProxy* pConfig) {
                 break;
             }
 #endif
+#ifdef __GAMEPAD__
+            case DataRepresentationProtocol::GAMEPAD: {
+                productInfo.protocol = QStringLiteral("gamepad");
+                break;
+            }
+#endif
             default: {
                 DEBUG_ASSERT(!"Unreachable");
                 return false;

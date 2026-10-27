@@ -2080,7 +2080,9 @@ target_include_directories(
 )
 if(UNIX AND NOT APPLE)
   target_sources(mixxx-lib PRIVATE src/util/rlimit.cpp)
-  set(MIXXX_SETTINGS_PATH ".mixxx/")
+  # Open Decks fork: its own settings folder, so a Mixxx install on the same
+  # machine keeps ~/.mixxx (the QML app refuses a 2.x profile anyway).
+  set(MIXXX_SETTINGS_PATH ".open-decks/")
 endif()
 
 if(APPLE)
@@ -2633,12 +2635,14 @@ endif()
 # tools/debian_buildenv.sh. If that font is not packaged on most distros, we
 # need to re-enable font installation on Linux/BSD and exclude the packaged
 # fonts here.
-if(APPLE OR WIN32)
-  install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts"
-    DESTINATION "${MIXXX_INSTALL_DATADIR}"
-  )
-endif()
+#
+# Open Decks fork: the handheld UI's faces (IBM Plex Sans/Mono, OFL) are not
+# packaged on SteamOS or Android and the AppImage is self-contained, so the
+# fork installs res/fonts everywhere.
+install(
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts"
+  DESTINATION "${MIXXX_INSTALL_DATADIR}"
+)
 
 # Keyboard mapping(s)
 install(
@@ -4054,6 +4058,7 @@ if(QML)
     PRIVATE
       src/qml/asyncimageprovider.cpp
       src/qml/qmlapplication.cpp
+      src/qml/removablemediamounter.cpp
       src/qml/qmlapplicationproxy.cpp
       src/qml/qmlautoreload.cpp
       src/qml/qmlcoreservices.cpp
@@ -4073,6 +4078,7 @@ if(QML)
       src/qml/qmllegacylibraryitem.cpp
       src/qml/qmllibraryproxy.cpp
       src/qml/qmllibrarysource.cpp
+    src/qml/qmlrekordboxproxy.cpp
       src/qml/qmllibrarysourcetree.cpp
       src/qml/qmllibrarytracklistmodel.cpp
       src/qml/qmlmixxxcontrollerscreen.cpp
@@ -5436,6 +5442,37 @@ if(BULK)
   target_link_libraries(mixxx-lib PRIVATE LibUSB::LibUSB)
   if(QML)
     target_compile_definitions(mixxx-qml-lib PUBLIC __BULK__)
+  endif()
+endif()
+
+# Game controller support through SDL's gamepad API (desktop). Android and
+# iOS will feed the same controller from their native input APIs instead.
+if(NOT ANDROID AND NOT IOS)
+  find_package(SDL3 CONFIG)
+endif()
+default_option(GAMEPAD "Game controller (gamepad) support via SDL3" "SDL3_FOUND")
+if(GAMEPAD)
+  if(NOT SDL3_FOUND)
+    message(FATAL_ERROR "Gamepad support requires SDL3 (set SDL3_DIR).")
+  endif()
+  target_sources(
+    mixxx-lib
+    PRIVATE
+      src/controllers/gamepad/sdlgamepadcontroller.cpp
+      src/controllers/gamepad/sdlgamepadenumerator.cpp
+  )
+  if(NOT HID AND NOT BULK)
+    target_sources(
+      mixxx-lib
+      PRIVATE
+        src/controllers/hid/legacyhidcontrollermapping.cpp
+        src/controllers/hid/legacyhidcontrollermappingfilehandler.cpp
+    )
+  endif()
+  target_compile_definitions(mixxx-lib PUBLIC __GAMEPAD__)
+  target_link_libraries(mixxx-lib PRIVATE SDL3::SDL3)
+  if(QML)
+    target_compile_definitions(mixxx-qml-lib PUBLIC __GAMEPAD__)
   endif()
 endif()
 

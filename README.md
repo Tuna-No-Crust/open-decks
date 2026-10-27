@@ -1,86 +1,133 @@
-# Mixxx
+# Open Decks
 
-[![GitHub latest tag](https://img.shields.io/github/tag/mixxxdj/mixxx.svg)](https://mixxx.org/download)
-[![Packaging status](https://repology.org/badge/tiny-repos/mixxx.svg)](https://repology.org/metapackage/mixxx/versions)
-[![Build status](https://github.com/mixxxdj/mixxx/actions/workflows/build.yml/badge.svg)](https://github.com/mixxxdj/mixxx/actions/workflows/build.yml)
-[![Coverage status](https://coveralls.io/repos/github/mixxxdj/mixxx/badge.svg)](https://coveralls.io/github/mixxxdj/mixxx)
-[![Zulip chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://mixxx.zulipchat.com)
-[![Donate](https://img.shields.io/opencollective/all/mixxx?label=Donate)](https://mixxx.org/donate)
+DJ on a Steam Deck. Open Decks turns a handheld with a touchscreen between
+its controls into a two-deck DJ rig: your rekordbox USB stick, jog wheels
+and faders on the sticks, touch for the rest. It is a fork of
+[Mixxx](https://mixxx.org) (GPL-2.0-or-later) with its own touch UI, a
+gamepad controller backend and rekordbox-first library handling.
 
-[Mixxx] is Free DJ software that gives you everything you need to perform live
-DJ mixes. Mixxx works on GNU/Linux, Windows, and macOS.
+**Status: proof of concept.** It plays sets today on a Steam Deck and that
+is the only supported device. Expect rough edges; see *What it is not*
+and the open items below. Website: <https://www.makestupidstuff.com/opendecks/>.
 
-## Quick Start
+## What it does
 
-To get started with Mixxx:
+- Reads a **rekordbox USB export** (the classic `PIONEER/rekordbox/export.pdb`
+  + `USBANLZ` analysis files): playlists, beatgrids, BPM, key, hot cues and
+  memory cues come along when a track is loaded.
+- **Mounts sticks itself, read-only.** Plug one in while the app runs; the
+  Library refreshes on its own. The app never writes to a stick, so pulling
+  it mid-set is as harmless as on a CDJ.
+- **Controller**: the Deck's sticks are jog wheels (CDJ-style nudge / scrub /
+  scratch), stick clicks play, bumpers cue, the trackpads play the FX pads.
+  Any SDL game controller works (DualSense tested); the mapping is a normal
+  Mixxx controller mapping (`res/controllers/Gamepad DJ.gamepad.xml` +
+  `Gamepad-DJ-scripts.js`), editable without a rebuild.
+- **Touch**: library browsing and drag-to-load, mixer (faders, EQ, filter,
+  crossfader), hot cue pads, loops, sync / vinyl / key lock, FX XY pads,
+  audio settings.
+- Audio: main out and headphone cue on any devices PipeWire exposes,
+  including class-compliant USB interfaces (Scarlett 4i4 tested: main on
+  1-2, cue on 3-4).
 
-1. For live use, [download the latest stable version][download-stable].
-2. For experimentation and testing, [download a development release][download-testing].
-3. To live on the bleeding edge, clone the repo: `git clone https://github.com/mixxxdj/mixxx.git`
+## What it is not
 
-## Bug tracker
+- Not a library manager: nothing is written to the stick, no USB export, no
+  track editing. Analysis happens in rekordbox.
+- Legacy rekordbox export only. The encrypted `exportLibrary.db` (rekordbox
+  7's "OneLibrary") is not read. rekordbox 7.2.11+ still writes the legacy
+  export by default. No Serato, no Traktor.
+- Steam Deck only for now. Android and iPhone are the next targets; the
+  macOS build is a development stand-in, not a product.
+- Not in any store, and no plans for one.
 
-The Mixxx team uses [Github Issues][issues] to manage Mixxx development.
+## Install on a Steam Deck
 
-Have a bug or feature request? [File a bug on Github][fileabug].
+You need: a Steam Deck (SteamOS 3.x), headphones, a USB stick with a
+rekordbox export, and optionally a USB-C audio interface. Everything below
+happens once, in Desktop Mode.
 
-Want to get involved in Mixxx development? Assign yourself a bug from the [easy
-bug list][easybugs] and get started!
+1. **Download** `OpenDecks-x86_64.AppImage` from the
+   [latest release](https://github.com/Tuna-No-Crust/open-decks/releases/latest)
+   into a folder of your choice, e.g. `~/Applications/open-decks/`, and
+   make it executable (right-click → Properties → Permissions → *Is
+   executable*, or `chmod +x`).
+2. **Add it to Steam**: Steam → *Games* → *Add a Non-Steam Game to My
+   Library* → *Browse*, pick the AppImage, name it "Open Decks". Steam Input
+   then owns the controller when the app runs, which is what you want.
+3. **Controller layout**: in the game's *Controller Settings* pick the
+   **"Gamepad with Joystick Trackpad"** template. The app takes the raw
+   Steam Deck controller back from Steam at start so the trackpads reach the
+   FX pads; the template keeps Steam from turning them into a mouse.
+4. **Touch without a pointer** (recommended): in the same layout, *Edit
+   Layout* → *Action Sets* → the cog next to "Default" → *Add Always-On
+   Command* → *System* tab → **Touchscreen Native Support**. Without it
+   Steam turns touches into a single mouse pointer; with it, two fingers
+   work (both FX pads at once, pad + fader).
+5. **Launch** from Game Mode or Desktop Mode. First start:
+   - The app picks outputs by name: the Deck's speaker (or a USB interface
+     with 4 outputs) as main and the headphone jack as cue. Change it in the
+     ⋯ menu → *Settings* (device and channel pair per output, buffer size),
+     then *Apply*. Aim for a buffer of 5–10 ms.
+   - Plug the stick in. The Library tab lists it; tap it to parse the export
+     (a few seconds for a few hundred tracks), tap a playlist, drag a track
+     to the left or right edge to load it.
+6. **Volume**: the Deck's volume buttons act on PipeWire's *default* sink,
+   which Steam points at the newest device. If cue is quiet, raise the
+   headphone sink once: Quick Access → Audio, or
+   `pactl set-sink-volume <headphone sink> 100%`.
 
-## Building Mixxx
+Settings live in `~/.open-decks/` (a Mixxx install on the same machine
+keeps its own `~/.mixxx/`). Logs: `~/.open-decks/mixxx.log`.
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions, code style
-guidelines, and how to open a pull request.
+### Other Linux
 
-## Documentation
+The AppImage runs on any x86_64 Linux with glibc 2.35+ (Ubuntu 22.04 and
+newer). Controllers need hidraw access for SDL: install
+`res/linux/mixxx-usb-uaccess.rules` into `/etc/udev/rules.d/` or run as a
+user that can read `/dev/hidraw*`. Sticks are mounted through UDisks2; if
+your session has no polkit agent, mount the stick yourself (`udisksctl
+mount -b /dev/sdX1 -o ro`) and press *Refresh* in the Library.
 
-For help using Mixxx, there are a variety of options:
+## Controls (Steam Deck, default mapping)
 
-- [Mixxx manual][manual]
-- [Mixxx wiki][wiki]
-- [Hardware Compatibility]
-- [Creating Skins]
+| Control | Deck 1 (left) | Deck 2 (right) |
+|---|---|---|
+| Stick turn / click | jog / **play** | jog / **play** |
+| Stick straight up/down (no modifier) | channel fader | channel fader |
+| L1 / R1 | cue; tap while the stick holds the platter = set cue | same |
+| A / B / Y | pick low / mid / high EQ band (both decks) | |
+| L2 + stick | ↕ picked band (slam down = kill, up = neutral), ↔ filter | same |
+| D-pad left / X | FX unit on/off | |
+| Trackpad | FX XY pad deck 1 | FX XY pad deck 2 |
+| Options + D-pad | ↑↓ browse the library, ←→ load to deck 1 / 2 | |
+| Back (Create) | load to an empty, else a stopped deck | |
+| L1 / R1 with the top bar focused | previous / next tab | |
 
-## Translation
+Hot cues, loops, sync, vinyl mode, key lock, tempo, PFL, mixer and FX are
+on the touchscreen. Every binding is in `Gamepad-DJ-scripts.js`; the jog
+feel (seconds per turn, nudge strength, grab radius, filter) is in the
+mapping's settings block.
 
-Help to spread Mixxx with translations into more languages, as well as to update and ensure the accuracy of existing translations.
+## Building
 
-- [Help translate content]
-- [Mixxx i18n wiki]
-- [Mixxx localization forum]
-- [Mixxx glossary]
+Open Decks builds like Mixxx (see upstream's
+[build instructions](https://github.com/mixxxdj/mixxx/wiki/Compiling-on-Linux))
+with two extra CMake options: `-DQML=ON` (the touch UI) and `-DGAMEPAD=ON
+-DSDL3_DIR=<path to SDL3's cmake folder>` (the gamepad backend; SDL3 ≥ 3.2,
+joystick/HIDAPI parts are enough). `packaging/open-decks/` has the
+Docker-based recipe that produces the Steam Deck AppImage.
 
-## Community
+The touch UI is QML under `res/qml/OpenDecks/`; a `--developer` build reads
+it from the source tree and reloads files on save. `--classic-ui` starts
+Mixxx's widget UI instead (diagnosis only).
 
-Mixxx is a vibrant community of hackers, DJs and artists. To keep track of
-development and community news:
+## Licence and credits
 
-- Chat with us on [Zulip][zulip].
-- Follow us on [Mastodon], [Bluesky] and [Facebook].
-- Subscribe to the [Mixxx Blog][blog].
-- Post on the [Mixxx forums][discourse].
-
-## License
-
-Mixxx is released under the GPLv2. See the LICENSE file for a full copy of the
-license.
-
-[mixxx]: https://mixxx.org
-[download-stable]: https://mixxx.org/download/#stable
-[download-testing]: https://mixxx.org/download/#testing
-[issues]: https://github.com/mixxxdj/mixxx/issues
-[fileabug]: https://github.com/mixxxdj/mixxx/issues/new/choose
-[mastodon]: https://floss.social/@mixxx
-[Bluesky]: https://bsky.app/profile/mixxx.bsky.social
-[facebook]: https://www.facebook.com/pages/Mixxx-DJ-Software/21723485212
-[blog]: https://mixxx.org/news/
-[manual]: https://manual.mixxx.org/
-[wiki]: https://github.com/mixxxdj/mixxx/wiki
-[easybugs]: https://github.com/mixxxdj/mixxx/issues?q=is%3Aopen+is%3Aissue+label%3Aeasy
-[creating skins]: https://mixxx.org/wiki/doku.php/Creating-Skins
-[help translate content]: https://explore.transifex.com/mixxx-dj-software/
-[Mixxx i18n wiki]: https://github.com/mixxxdj/mixxx/wiki/Internationalization
-[Mixxx localization forum]: https://mixxx.discourse.group/c/translation/13
-[hardware compatibility]: https://manual.mixxx.org/2.3/en/hardware/manuals.html
-[zulip]: https://mixxx.zulipchat.com/
-[discourse]: https://mixxx.discourse.group/
+Open Decks is free software under the GNU GPL, version 2 or later, like
+Mixxx (`COPYING`). Built on Mixxx by the Mixxx developers. The handheld UI
+uses IBM Plex (SIL Open Font License, `res/fonts/IBMPlex.LICENSE.txt`).
+rekordbox is a trademark of AlphaTheta; this project is not affiliated with
+it and reads the export format through the community's `rekordbox-metadata`
+library. Built with Claude Code; the maintainer made the calls and played
+every mapping on the Deck.

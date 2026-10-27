@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MixxxControllerPreset schemaVersion="1" mixxxVersion="2.7+">
+    <info>
+        <name>Gamepad DJ</name>
+        <author>Open Decks</author>
+        <description>Two-deck DJing on any game controller: each analog stick is a jog wheel for its deck (spin it like a platter), face buttons and D-pad are transport and hot cues, triggers ride the effects.</description>
+        <devices>
+            <product protocol="gamepad"/>
+        </devices>
+    </info>
+    <settings>
+        <group label="Jog wheels (sticks)">
+            <option
+                variable="secondsPerTurn"
+                type="real"
+                min="0.3"
+                max="10.0"
+                step="0.1"
+                precision="1"
+                default="1.8"
+                label="Seconds of audio per stick turn">
+                <description>How far one full circle of the stick moves the track when scratching or scrubbing. 1.8 s is one turn of a 33⅓ rpm record.</description>
+            </option>
+            <option
+                variable="nudgeSensitivity"
+                type="real"
+                min="1"
+                max="200"
+                step="1"
+                precision="0"
+                default="40"
+                label="Nudge strength while playing">
+                <description>How hard circling the stick pushes a playing track ahead or holds it back (the outer edge of a CDJ jog wheel).</description>
+            </option>
+            <option
+                variable="grabRadius"
+                type="real"
+                min="0.3"
+                max="0.99"
+                step="0.05"
+                precision="2"
+                default="0.7"
+                label="Grab: push past this to touch the platter">
+                <description>Fraction of full stick travel. Pushing the stick out past this starts a jog.</description>
+            </option>
+            <option
+                variable="holdRadius"
+                type="real"
+                min="0.1"
+                max="0.9"
+                step="0.05"
+                precision="2"
+                default="0.3"
+                label="Hold: rotation keeps counting above this">
+                <description>Once grabbed, the stick may drift inward while circling. Above this radius its rotation still counts; below it the angle is too unreliable and is ignored until the stick comes back out.</description>
+            </option>
+            <option
+                variable="releaseRadius"
+                type="real"
+                min="0.02"
+                max="0.5"
+                step="0.01"
+                precision="2"
+                default="0.15"
+                label="Release: centre zone">
+                <description>The stick has to settle inside this radius to let go of the platter.</description>
+            </option>
+            <option
+                variable="releaseMs"
+                type="integer"
+                min="0"
+                max="500"
+                default="50"
+                label="Release: time at centre (ms)">
+                <description>How long the stick must stay in the centre zone before the platter is released. Short dips through the centre while spinning are forgiven.</description>
+            </option>
+            <option
+                variable="maxStepTurns"
+                type="real"
+                min="0.05"
+                max="0.5"
+                step="0.05"
+                precision="2"
+                default="0.2"
+                label="Largest step per update (turns)">
+                <description>Caps how much rotation one controller update can add, so a fast flick across the stick can't make the track jump.</description>
+            </option>
+        </group>
+        <group label="Faders and knobs (hold L2 / R2)">
+            <option
+                variable="faderTravelSeconds"
+                type="real"
+                min="0.1"
+                max="5.0"
+                step="0.1"
+                precision="1"
+                default="0.35"
+                label="Seconds for a full sweep">
+                <description>With L2 or R2 held, a stick pushed all the way moves its fader or knob end to end in this time; smaller pushes move it slower.</description>
+            </option>
+            <option
+                variable="faderCurve"
+                type="real"
+                min="1.0"
+                max="4.0"
+                step="0.1"
+                precision="1"
+                default="1.8"
+                label="Response curve">
+                <description>1 = speed rises evenly with how far the stick is pushed. Higher values make small pushes much slower, for long deliberate fades, while a full push stays fast.</description>
+            </option>
+            <option
+                variable="slamMs"
+                type="integer"
+                min="0"
+                max="300"
+                default="80"
+                label="Slam window (ms)">
+                <description>Pushing a stick from rest to the edge faster than this jumps the fader or knob straight to its end (faders to 100 or 0, EQs to kill or neutral). 0 turns slams off.</description>
+            </option>
+        </group>
+        <group label="Touchpads (FX pads)">
+            <option
+                variable="touchpadShowsFx"
+                type="boolean"
+                default="false"
+                label="Touching a touchpad shows the FX screen">
+                <description>A finger on the controller's touchpad plays the FX screen's XY pad for its deck. With this on, the touch also switches the screen to the FX tab so the pad is visible. Off by default: thumbs rest on the Steam Deck's trackpads.</description>
+            </option>
+        </group>
+        <group label="Debug">
+            <option
+                variable="logJog"
+                type="boolean"
+                default="true"
+                label="Log jog grabs and releases">
+                <description>Write each platter grab and release, with the turns counted, to the Mixxx log.</description>
+            </option>
+        </group>
+    </settings>
+    <controller id="Gamepad DJ">
+        <scriptfiles>
+            <file filename="Gamepad-DJ-scripts.js" functionprefix="GamepadDJ"/>
+        </scriptfiles>
+    </controller>
+</MixxxControllerPreset>

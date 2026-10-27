@@ -1,7 +1,9 @@
 #include "soundio/soundmanagerconfig.h"
 
 #include <QRegularExpression>
+#include <QtDebug>
 #include <QtGlobal>
+#include <limits>
 
 #include "audio/types.h"
 #include "soundio/sounddevice.h"
@@ -562,19 +564,70 @@ void SoundManagerConfig::loadDefaults(SoundManager* soundManager, unsigned int f
         clearInputs();
         const QList<SoundDevicePointer> outputDevices =
                 soundManager->getDeviceList(m_api, true, false);
-        if (!outputDevices.isEmpty()) {
-            for (const auto& pDevice : outputDevices) {
-                if (pDevice->getNumOutputChannels() < 2) {
-                    continue;
-                }
-                AudioOutput mainOut(AudioPathType::Main,
-                        0,
-                        mixxx::audio::ChannelCount::stereo(),
-                        0);
-                addOutput(pDevice->getDeviceId(), mainOut);
-                defaultSampleRate = pDevice->getDefaultSampleRate();
-                break;
+        // Open Decks fork: pick outputs by name, not list order. On a Steam
+        // Deck the first JACK device PortAudio lists is the internal
+        // microphone (PipeWire gives it output channels) and opening it
+        // fails with "Unanticipated host error", i.e. silence on first run.
+        // A DJ rig wants main out on a USB interface (else the speaker) and
+        // cue on the headphones, or on channels 3-4 of a 4-out interface.
+        static const QRegularExpression kNotForPlayback(
+                QStringLiteral("mic|capture|network|loopback|monitor of"),
+                QRegularExpression::CaseInsensitiveOption);
+        SoundDevicePointer pMain;
+        SoundDevicePointer pCue;
+        int mainScore = std::numeric_limits<int>::min();
+        for (const auto& pDevice : outputDevices) {
+            if (pDevice->getNumOutputChannels() < 2) {
+                continue;
             }
+            const QString name = pDevice->getDisplayName();
+            if (kNotForPlayback.match(name).hasMatch()) {
+                continue;
+            }
+            int score = 0;
+            if (pDevice->getNumOutputChannels() >= 4) {
+                score += 4; // a DJ interface with a separate cue pair
+            }
+            if (name.contains(QStringLiteral("usb"), Qt::CaseInsensitive)) {
+                score += 3;
+            }
+            if (name.contains(QStringLiteral("speaker"), Qt::CaseInsensitive)) {
+                score += 2;
+            }
+            if (name.contains(QStringLiteral("headphone"), Qt::CaseInsensitive)) {
+                score += 1;
+                if (!pCue) {
+                    pCue = pDevice;
+                }
+            }
+            if (score > mainScore) {
+                mainScore = score;
+                pMain = pDevice;
+            }
+        }
+        if (pMain) {
+            addOutput(pMain->getDeviceId(),
+                    AudioOutput(AudioPathType::Main,
+                            0,
+                            mixxx::audio::ChannelCount::stereo(),
+                            0));
+            defaultSampleRate = pMain->getDefaultSampleRate();
+            if (pMain->getNumOutputChannels() >= 4) {
+                addOutput(pMain->getDeviceId(),
+                        AudioOutput(AudioPathType::Headphones,
+                                2,
+                                mixxx::audio::ChannelCount::stereo(),
+                                0));
+            } else if (pCue && pCue != pMain) {
+                addOutput(pCue->getDeviceId(),
+                        AudioOutput(AudioPathType::Headphones,
+                                0,
+                                mixxx::audio::ChannelCount::stereo(),
+                                0));
+            }
+            qInfo() << "Open Decks: default outputs: main" << pMain->getDisplayName()
+                    << "cue" << (pMain->getNumOutputChannels() >= 4 ? pMain->getDisplayName() + " 3-4"
+                                                                      : pCue ? pCue->getDisplayName() : QStringLiteral("none"));
         }
     }
     if (flags & SoundManagerConfig::OTHER) {

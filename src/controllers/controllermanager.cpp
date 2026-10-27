@@ -32,6 +32,10 @@
 #include "controllers/bulk/bulkenumerator.h"
 #endif
 
+#ifdef __GAMEPAD__
+#include "controllers/gamepad/sdlgamepadenumerator.h"
+#endif
+
 // http://developer.qt.nokia.com/wiki/Threads_Events_QObjects
 
 // Poll every 1ms (where possible) for good controller response
@@ -182,6 +186,9 @@ void ControllerManager::slotInitialize() {
 #ifdef __HID__
         m_enumerators.push_back(std::make_unique<HidEnumerator>());
 #endif
+#ifdef __GAMEPAD__
+        m_enumerators.push_back(std::make_unique<SdlGamepadEnumerator>());
+#endif
     } // Mutex locker released here
     emit initialized();
 }
@@ -286,8 +293,17 @@ void ControllerManager::slotSetUpDevices() {
         // The filename for this device name.
         QString deviceName = sanitizeDeviceName(name);
 
+        // A device the user has never configured may come with a default
+        // mapping (gamepads); enable it with that so it works on plug-in.
+        const ConfigKey enabledKey("[Controller]", deviceName);
+        if (!m_pConfig->exists(enabledKey) && !pController->defaultMappingFile().isEmpty()) {
+            m_pConfig->set(enabledKey, ConfigValue(1));
+            m_pConfig->set(ConfigKey(kSettingsGroup, deviceName),
+                    ConfigValue(pController->defaultMappingFile()));
+        }
+
         // Check if device is enabled
-        if (!m_pConfig->getValue(ConfigKey("[Controller]", deviceName), 0)) {
+        if (!m_pConfig->getValue(enabledKey, 0)) {
             continue;
         }
 

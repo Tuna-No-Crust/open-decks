@@ -261,5 +261,10 @@ void QmlSoundManagerProxy::commit() {
     m_pSoundManager->closeActiveConfig(true);
 }
 
+void QmlSoundManagerProxy::rescanDevices() {
+    ScopedWaitCursor cursor;
+    m_pSoundManager->clearAndQueryDevices();
+}
+
 } // namespace qml
 } // namespace mixxx

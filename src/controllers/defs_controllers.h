@@ -25,6 +25,7 @@ inline QString userMappingsPath(UserSettingsPointer pConfig) {
 #define HID_MAPPING_EXTENSION ".hid.xml"
 #define MIDI_MAPPING_EXTENSION ".midi.xml"
 #define BULK_MAPPING_EXTENSION ".bulk.xml"
+#define GAMEPAD_MAPPING_EXTENSION ".gamepad.xml"
 #define XML_SCHEMA_VERSION "1"
 
 #ifdef __PORTMIDI__

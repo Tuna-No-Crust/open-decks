@@ -9,7 +9,7 @@
 #include "util/logger.h"
 #include "util/xml.h"
 
-#if defined(__HID__) || defined(__BULK__)
+#if defined(__HID__) || defined(__BULK__) || defined(__GAMEPAD__)
 #include "controllers/hid/legacyhidcontrollermappingfilehandler.h"
 #endif
 
@@ -211,6 +211,12 @@ std::shared_ptr<LegacyControllerMapping> LegacyControllerMappingFileHandler::loa
     } else if (mappingFile.fileName().endsWith(
                        BULK_MAPPING_EXTENSION, Qt::CaseInsensitive)) {
 #ifdef __BULK__
+        pHandler = std::make_unique<LegacyHidControllerMappingFileHandler>();
+#endif
+    } else if (mappingFile.fileName().endsWith(
+                       GAMEPAD_MAPPING_EXTENSION, Qt::CaseInsensitive)) {
+#ifdef __GAMEPAD__
+        // Script-only mappings, same format as HID
         pHandler = std::make_unique<LegacyHidControllerMappingFileHandler>();
 #endif
     }

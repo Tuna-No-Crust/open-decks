@@ -701,11 +701,20 @@ void CoreServices::initialize(QApplication* pApp) {
         // resolves to) and a user hitting 'cancel'. If we get a blank return
         // but the user didn't hit cancel, we need to know this and let the
         // user take some course of action -- bkgood
-        QString fd = QFileDialog::getExistingDirectory(nullptr,
-                tr("Choose music library directory"),
-                QStandardPaths::writableLocation(
-                        QStandardPaths::MusicLocation),
-                QFileDialog::ShowDirsOnly);
+        QString fd;
+#ifdef MIXXX_USE_QML
+        // Open Decks fork: the touch UI plays from rekordbox sticks and never
+        // needs a Mixxx music folder, and a native folder dialog at every
+        // start is a trap on a handheld. Skip it; the library stays empty.
+        if (!m_cmdlineArgs.isQml())
+#endif
+        {
+            fd = QFileDialog::getExistingDirectory(nullptr,
+                    tr("Choose music library directory"),
+                    QStandardPaths::writableLocation(
+                            QStandardPaths::MusicLocation),
+                    QFileDialog::ShowDirsOnly);
+        }
 #endif
         // request to add directory to database.
         if (!fd.isEmpty() && m_pLibrary->requestAddDir(fd)) {
