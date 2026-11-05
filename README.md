@@ -47,14 +47,24 @@ You need: a Steam Deck (SteamOS 3.x), headphones, a USB stick with a
 rekordbox export, and optionally a USB-C audio interface. Everything below
 happens once, in Desktop Mode.
 
-1. **Download** `OpenDecks-x86_64.AppImage` from the
+1. **Install**: open *Konsole* and run
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/Tuna-No-Crust/open-decks/main/packaging/open-decks/launcher/install.sh | bash
+   ```
+
+   It puts the latest release's AppImage, a launcher (`open-decks.sh`) and
+   an updater into `~/Applications/open-decks/`. Rather do it by hand?
+   Download `OpenDecks-x86_64.AppImage` from the
    [latest release](https://github.com/Tuna-No-Crust/open-decks/releases/latest)
-   into a folder of your choice, e.g. `~/Applications/open-decks/`, and
-   make it executable (right-click → Properties → Permissions → *Is
-   executable*, or `chmod +x`).
+   and the two scripts from
+   [`packaging/open-decks/launcher/`](packaging/open-decks/launcher) into
+   that folder, rename the AppImage to `open-decks.AppImage` and make all
+   three executable.
 2. **Add it to Steam**: Steam → *Games* → *Add a Non-Steam Game to My
-   Library* → *Browse*, pick the AppImage, name it "Open Decks". Steam Input
-   then owns the controller when the app runs, which is what you want.
+   Library* → *Browse*, set the file type to *All Files*, pick
+   `~/Applications/open-decks/open-decks.sh`, name it "Open Decks". Steam
+   Input then owns the controller when the app runs, which is what you want.
 3. **Controller layout**: in the game's *Controller Settings* pick the
    **"Gamepad with Joystick Trackpad"** template. The app takes the raw
    Steam Deck controller back from Steam at start so the trackpads reach the
@@ -76,6 +86,15 @@ happens once, in Desktop Mode.
    which Steam points at the newest device. If cue is quiet, raise the
    headphone sink once: Quick Access → Audio, or
    `pactl set-sink-volume <headphone sink> 100%`.
+
+**Updates**: every start through the launcher checks the latest release
+(a few seconds at most; offline it just starts) and, when there is a new
+one, downloads it, checks its SHA-256 and swaps it in before the app opens,
+never while it runs. The previous version stays as
+`open-decks.AppImage.prev`. Coming from 0.1.0 (the AppImage added to Steam
+directly)? Run the install command once and point the Steam shortcut at
+`open-decks.sh`. To stay on a version, create an empty `DEV_BUILD` file in
+the folder.
 
 Settings live in `~/.open-decks/` (a Mixxx install on the same machine
 keeps its own `~/.mixxx/`). Logs: `~/.open-decks/mixxx.log`.
