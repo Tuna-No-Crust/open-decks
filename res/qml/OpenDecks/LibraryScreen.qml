@@ -32,8 +32,9 @@ Item {
         rb.loadTrack(row, deck);
     }
 
-    // Controller browsing (Options + D-pad in the gamepad mapping): the same
-    // [Library] / [ChannelN] controls the classic library listens to.
+    // Controller browsing (the gamepad mapping's browse layout: sticks, D-pad,
+    // bumpers): the same [Library] / [Playlist] / [ChannelN] controls the
+    // classic library listens to.
     property int selectedRow: -1
 
     // Push buttons the controller taps: act on the signalled value (the
@@ -70,6 +71,22 @@ Item {
 
         onValueChanged: (v) => { if (v > 0) { root.loadSelected(2); load2.value = 0; } }
     }
+    Mixxx.ControlProxy {
+        id: prevPlaylist
+
+        group: "[Playlist]"
+        key: "SelectPrevPlaylist"
+
+        onValueChanged: (v) => { if (v > 0) { root.movePlaylist(-1); prevPlaylist.value = 0; } }
+    }
+    Mixxx.ControlProxy {
+        id: nextPlaylist
+
+        group: "[Playlist]"
+        key: "SelectNextPlaylist"
+
+        onValueChanged: (v) => { if (v > 0) { root.movePlaylist(1); nextPlaylist.value = 0; } }
+    }
     Mixxx.ControlProxy { id: tabControl; group: "[OpenDecks]"; key: "tab" }
 
     function moveSelection(step) {
@@ -80,6 +97,30 @@ Item {
         selectedRow = Math.max(0, Math.min(count - 1, selectedRow + step));
         table.positionViewAtIndex(selectedRow, ListView.Contain);
         tabControl.value = 1; // browsing shows the library
+    }
+    // Step to the previous / next entry in the sidebar that shows tracks
+    // ("All tracks" and playlists; devices and folders are skipped), stopping
+    // at the ends.
+    function movePlaylist(step) {
+        tabControl.value = 1;
+        const rows = [];
+        for (let i = 0; i < sidebarModel.count; i++) {
+            const e = sidebarModel.get(i);
+            if (e.kind !== "device" && !e.folder) {
+                rows.push({ index: i, path: e.path });
+            }
+        }
+        if (rows.length === 0) {
+            return;
+        }
+        const at = rows.findIndex((r) => r.path === rb.currentPlaylist);
+        const next = at < 0 ? 0 : Math.max(0, Math.min(rows.length - 1, at + step));
+        if (next === at) {
+            return;
+        }
+        selectedRow = -1;
+        rb.selectPlaylist(rows[next].path);
+        sidebar.positionViewAtIndex(rows[next].index, ListView.Contain);
     }
     function loadSelected(deck) {
         if (selectedRow >= 0 && selectedRow < rb.tracks.count) {

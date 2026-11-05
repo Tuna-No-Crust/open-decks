@@ -19,6 +19,21 @@ QtObject {
         key: "focus"
     }
 
+    // What the gamepad's sticks are armed for (tap A / B / Y / X, combos
+    // allowed): bits 1 low EQ, 2 mid, 4 high, 8 channel fader; 0 = jog. The
+    // mixer lights those controls up. (Builds before 2026-11-05 lack the
+    // control: always 0.)
+    readonly property int pick: pickCtl.value
+    readonly property Mixxx.ControlProxy pickControl: Mixxx.ControlProxy {
+        id: pickCtl
+
+        group: "[OpenDecks]"
+        key: "pick"
+    }
+    function picked(bit) {
+        return (pick & bit) !== 0;
+    }
+
     function focusDeck(deckNumber) {
         focusControl.value = deckNumber;
     }

@@ -161,6 +161,11 @@ QmlApplication::QmlApplication(
     m_pOpenDecksTab = std::make_unique<ControlObject>(ConfigKey(openDecks, QStringLiteral("tab")));
     m_pOpenDecksTabNext = std::make_unique<ControlPushButton>(ConfigKey(openDecks, QStringLiteral("tab_next")));
     m_pOpenDecksTabPrev = std::make_unique<ControlPushButton>(ConfigKey(openDecks, QStringLiteral("tab_prev")));
+    // What the gamepad's sticks are armed for (A/B/Y/X picks), as bits:
+    // 1 low EQ, 2 mid, 4 high, 8 channel fader; 0 = jog. The mixer lights
+    // the armed controls up.
+    m_openDecksControls.push_back(std::make_unique<ControlObject>(
+            ConfigKey(openDecks, QStringLiteral("pick"))));
     for (int deck = 1; deck <= 2; ++deck) {
         const QString prefix = QStringLiteral("fx%1_").arg(deck);
         for (const char* suffix : {"touch", "x", "y"}) {

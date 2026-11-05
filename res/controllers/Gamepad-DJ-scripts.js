@@ -17,54 +17,59 @@
 // itself (mostly inward motion) is not counted as turning, and a paused deck
 // stops dead on release, so it stays where it was scrubbed to.
 //
-// Layout (left hand = deck 1, right hand = deck 2):
+// Screens (user, 2026-11-05: "switching menus should change the controls,
+// I shouldn't be able to mess with songs and faders in the library page"):
+// the controller follows the touch UI's tab ([OpenDecks] tab).
+//   Perform, FX       the performance layout below
+//   Library, Settings the browse layout: jog, faders, EQ, cue, play and the
+//                     touchpads are off, the sticks and bumpers browse instead
+// Leaving Perform/FX lets go of everything in progress (a held cue, a held
+// platter, a fader or L2 push, a touchpad finger), and a stick that was
+// pushed has to come back to rest before it does anything on the new screen.
+//   Switch screens              Options = next tab, Create = previous tab, on every screen
+//
+// Performance layout (left hand = deck 1, right hand = deck 2):
 //   Play                        click the left stick (L3)   click the right stick (R3)
-//   FX on / off                 D-pad left                  Square (X)
-//   Select EQ low / mid / high  Cross (A) / Circle (B) / Triangle (Y), for both decks
-//                               (which band L2 + either stick moves; D-pad
-//                               up / down / right are free)
-//   Channel fader               push the stick straight up / down, no modifier
-//                               (user, 2026-10-27: "can jogs and channel
-//                               volume live in the same state?" -- trying it)
+//   Jog                         turn the stick (always, unless a pick is armed)
+//   Pick for the sticks         tap X (Square) = channel fader, A (Cross) = low EQ,
+//                               B (Circle) = mid, Y (Triangle) = high
+//   Cue                         L1 = deck 1, R1 = deck 2 (Mixxx's normal cue button);
+//                               on a playing deck only after a cueHoldMs hold, so a
+//                               brush can't stop the track; tap while that side's
+//                               stick holds the platter = set the cue right there
 //   Vinyl mode / sync / loops   on the touch UI (deck panel badges and loop chips)
 //   Hot cues                    on screen (touch pads), not on the controller
-//   Cue                         L1 = deck 1, R1 = deck 2 (Mixxx's normal cue button);
-//                               tap while that side's stick holds the platter = set the
-//                               cue right there
-//   Switch screens              tap the top bar on screen, then L1 / R1 = previous / next tab
-//   Jog and fader in one state (user, 2026-10-27): a push is sorted when it
-//   reaches kFaderDecideRadius: within kFaderSectorDeg of straight up/down
-//   it is a channel fader push (the jog can't grab until the stick is back
-//   at rest); anywhere else it is the jog, which grabs at grabRadius as
-//   before. Start a turn from 3 or 9 o'clock, a fade from 12 or 6.
-//   Stick layer -- hold L2 and the sticks stop being jog wheels (user,
-//   2026-10-27: one trigger, R2 is free). Each stick works its own deck
-//   (left = 1, right = 2), with two controls, one per axis; each push locks
-//   to the axis it starts along:
-//                 up/down                      left/right
-//     L2          picked EQ band               filter (quick effect)
-//   Tap A / B / Y to pick the band (also while L2 is held). The effect amount
-//   is on the FX pads (touchpads / screen) now, not on a stick. (No tempo
-//   control on the pad: sync, or the touch fader.)
+//   FX on / off                 the touchpads and the screen only
+//   Picks (user, 2026-11-05: "remove the L2 layer entirely, tapping ABXY
+//   selects a fader or EQ band to use", after the bare-stick fader kept
+//   firing while jogging or nudging): a tap arms both sticks for the picked
+//   control -- up/down on each stick moves its own deck's fader or band --
+//   and they go back to being jogs once both have been at rest for pickHoldMs.
+//   A stick that is holding the platter when the tap comes keeps jogging
+//   until it is back at rest. Combos: press one while holding another and
+//   both are armed (A+B = low and mid together). The armed controls light
+//   up on screen ([OpenDecks] pick, bits: 1 low, 2 mid, 4 high, 8 fader). L2
+//   and R2 do nothing; the filter is on the touch screen.
 //   The sticks spring back, so they move a fader/knob at a speed set by how
 //   far they're pushed (on a curve, for fine slow fades), and letting go
 //   leaves it where it is. Slamming a stick from rest to the edge jumps
-//   straight to the end: faders to 100/0, EQs to kill (down) or neutral (up),
-//   effect amount to full/off, and the filter back to neutral either way.
+//   straight to the end: faders to 100/0, EQs to kill (down) or neutral (up).
 //   FX XY pads                  the controller's touchpads play the FX screen's
 //   pads: a finger on the Steam Deck's left / right trackpad (or the left /
 //   right half of a DualSense touchpad) is a finger on deck 1's / deck 2's pad.
 //   Touch = effect on, slide = X (the effect's parameter) and Y (wet), lift =
 //   off unless Hold is on; the pad on screen follows the finger.
 //
-// The focused deck will be the one tapped on the touchscreen; until the touch
-// UI exists it is the last deck used from the controller.
-//   Vinyl mode                  L3                          R3
-//   Library: hold Options (Start) + D-pad up/down to scroll,
-//            + D-pad left/right to load the selection on deck 1/2.
-//            (Options is on the right so the left thumb stays on the D-pad.)
-//   Create (Back/Select) loads the selection on an empty deck, else one that
-//   isn't playing (never onto a playing deck).
+// Browse layout (Library, Settings):
+//   Tracks                      left stick or D-pad up / down (the further the
+//                               stick is pushed, the faster the list moves)
+//   Playlists                   right stick up / down
+//   Load the highlighted track  L1 = deck 1, R1 = deck 2 (the sides of their cue);
+//                               A = an empty deck, else one that isn't playing
+//                               (never onto a playing deck: the UI refuses it)
+//
+// The focused deck is the one tapped on the touchscreen, else the last deck
+// used from the controller.
 
 var GamepadDJ = {};
 
@@ -82,31 +87,34 @@ GamepadDJ.kReportSize = 50;
 GamepadDJ.kMaxTouchpads = 2;
 GamepadDJ.kMaxFingers = 2;
 GamepadDJ.kIntervalsPerTurn = 1024; // scratch resolution
-GamepadDJ.kTriggerOn = 0.03;
-// L2 enters the mixer layer past kLayerOn and leaves it below kLayerOff.
-GamepadDJ.kLayerOn = 0.5;
-GamepadDJ.kLayerOff = 0.3;
 GamepadDJ.kStickDeadzone = 0.15;
 GamepadDJ.kLayerTickMs = 15;
-// Base state, no modifier: a push is sorted into "fader" or "jog" once it
-// reaches kFaderDecideRadius (must be below grabRadius, where the jog takes
-// hold): a fader push when its direction is within kFaderSectorDeg of
-// straight up or down, the jog otherwise. Decided once per push, until the
-// stick is back in the dead zone.
-GamepadDJ.kFaderDecideRadius = 0.4;
-GamepadDJ.kFaderSectorDeg = 20;
 // Inward motion this many times larger than the motion around the rim means
 // the stick is springing back to the centre, not turning.
 GamepadDJ.kSpringBackRatio = 2;
 GamepadDJ.kSpringBackMinStep = 0.01;
 GamepadDJ.kScrollRepeatDelayMs = 300;
 GamepadDJ.kScrollRepeatMs = 90;
+// Browse layout: a stick scrolls a list once it is pushed past kListStickOn
+// up or down (and stops below kListStickOff), one step at once, then one
+// every slowMs at that threshold down to fastMs at full push.
+GamepadDJ.kListStickOn = 0.35;
+GamepadDJ.kListStickOff = 0.25;
+GamepadDJ.kTrackListMs = {slowMs: 260, fastMs: 35};
+GamepadDJ.kPlaylistMs = {slowMs: 450, fastMs: 160};
+// What A / B / Y / X arm the sticks for; [OpenDecks] pick has bit N set
+// while kPicks[N] is armed.
+GamepadDJ.kPicks = ["low", "mid", "high", "fader"];
+// [OpenDecks] tab: 0 Perform, 1 Library, 2 FX, 3 Settings.
+GamepadDJ.kBrowseTabs = [1, 3];
 GamepadDJ.kFocusTracks = 3; // [Library] focused_widget: FocusWidget::TracksTable
 
 GamepadDJ.kSettingFallbacks = {
     faderTravelSeconds: 0.35,
     faderCurve: 1.8,
     slamMs: 80,
+    pickHoldMs: 1500,
+    cueHoldMs: 250,
     touchpadShowsFx: false,
 };
 // A slam must reach this far out within slamMs of leaving the dead zone.
@@ -332,10 +340,6 @@ GamepadDJ.setMomentary = function(group, key, pressed) {
     engine.setValue(group, key, pressed ? 1 : 0);
 };
 
-GamepadDJ.bandName = function() {
-    return ["low", "mid", "high"][GamepadDJ.band - 1];
-};
-
 GamepadDJ.togglePlay = function(group) {
     engine.setValue(group, "play", engine.getValue(group, "play") ? 0 : 1);
 };
@@ -348,19 +352,16 @@ GamepadDJ.toggleLoop = function(group) {
     }
 };
 
-// One deck's buttons: play (stick click), FX on/off and the EQ band pick.
-// Cue lives on the bumpers. (Hot cues, vinyl, sync and loops live on the
-// touchscreen. L2 + a button used to toggle vinyl / sync / loop; dropped
-// 2026-10-26 after a stray L2 + A put deck 2 in vinyl mode.)
+// One deck's buttons: play (stick click). Cue lives on the bumpers, the
+// picks on the face buttons. (Hot cues, vinyl, sync, loops and FX on/off
+// live on the touchscreen and touchpads. L2 + a button used to toggle vinyl
+// / sync / loop; dropped 2026-10-26 after a stray L2 + A put deck 2 in vinyl
+// mode.)
 GamepadDJ.Deck = class {
     constructor(deck, buttons) {
         this.deck = deck;
         this.group = `[Channel${deck}]`;
-        this.eqGroup = `[EqualizerRack1_[Channel${deck}]_Effect1]`;
-        this.unitGroup = `[EffectRack1_EffectUnit${deck}]`;
-        this.slotGroup = `[EffectRack1_EffectUnit${deck}_Effect1]`;
-        // {play, fxOn} -> button bit. (The EQ band pick is global, see
-        // GamepadDJ.band.)
+        // {play} -> button bit.
         this.buttons = buttons;
     }
 
@@ -369,39 +370,21 @@ GamepadDJ.Deck = class {
         if (pressed) {
             GamepadDJ.focus(this.deck - 1);
         }
-        const b = this.buttons;
-        if (bit === b.play) {
-            if (pressed) {
-                GamepadDJ.togglePlay(this.group);
-            }
-        } else if (bit === b.fxOn) {
-            // FX on/off for this deck: its own effect unit routed onto it,
-            // like the FX pad's Hold. Switching on also enables slot 1.
-            if (pressed) {
-                this.toggleFx();
-            }
+        if (bit === this.buttons.play && pressed) {
+            GamepadDJ.togglePlay(this.group);
         }
-    }
-
-    toggleFx() {
-        const key = `group_${this.group}_enable`;
-        const on = engine.getValue(this.unitGroup, key) ? 0 : 1;
-        if (on) {
-            engine.setValue(this.slotGroup, "enabled", 1);
-        }
-        engine.setValue(this.unitGroup, key, on);
-        console.log(`Gamepad DJ: deck ${this.deck} FX ${on ? "on" : "off"}`);
     }
 };
 
 // --- Stick layers ------------------------------------------------------
 
 /**
- * While its trigger is held, a layer takes the sticks away from the jogs.
- * Each stick drives two values of its own deck: targets.y for up/down and
- * targets.x for left/right. A push locks to the axis it starts along (the
- * larger component as it leaves the dead zone) until the stick is back at
- * rest, so a slightly diagonal fade doesn't also move the other control.
+ * Moves faders and knobs with the sticks it is fed (the armed ones; a stick
+ * it doesn't own is fed as [0, 0], i.e. at rest). Each stick drives values
+ * of its own deck: targets.y for up/down and targets.x for left/right. A
+ * push locks to the axis it starts along (the larger component as it leaves
+ * the dead zone) until the stick is back at rest, so a slightly diagonal
+ * fade doesn't also move the other control.
  *
  * A stick springs back to the centre, so it sets the *speed*: full deflection
  * sweeps the whole range in faderTravelSeconds, bent by faderCurve so small
@@ -410,15 +393,14 @@ GamepadDJ.Deck = class {
  * from the dead zone to kSlamReach within slamMs jumps the value to its end
  * instead: target.slamUp (default 1) or target.slamDown (default 0).
  *
- * A target is {group, key, slamUp?, slamDown?, before?, after?} or null for
- * "nothing". Values move with get/setParameter (normalised 0..1), which
+ * targets.x / .y map a deck index to a list of {group, key, slamUp?,
+ * slamDown?} (empty = "nothing"). Values move with get/setParameter (normalised 0..1), which
  * follows each control's own curve -- linear faders, centred-unity EQs.
  */
 GamepadDJ.StickLayer = class {
     constructor(name, targets) {
         this.name = name;
-        this.targets = targets; // {x: (deckIndex) => target, y: ...}
-        this.active = false;
+        this.targets = targets; // {x: (deckIndex) => [target], y: ...}
         this.timer = 0;
         this.lastTick = 0;
         // Per stick: the locked axis ("x" | "y" | null at rest), the signed
@@ -430,25 +412,8 @@ GamepadDJ.StickLayer = class {
         this.slammed = [false, false];
     }
 
-    // trigger: 0..1; sticks: [[x, y], [x, y]] with y down-positive.
-    // Returns true while the layer owns the sticks.
-    update(trigger, sticks) {
-        if (!this.active && trigger >= GamepadDJ.kLayerOn) {
-            this.active = true;
-            for (const jog of GamepadDJ.jogs) {
-                jog.suspend();
-            }
-        } else if (this.active && trigger < GamepadDJ.kLayerOff) {
-            this.active = false;
-            this.stop();
-            this.axis = [null, null];
-            for (const jog of GamepadDJ.jogs) {
-                jog.suspend(); // back to jog only once each stick is centred
-            }
-        }
-        if (!this.active) {
-            return false;
-        }
+    // sticks: [[x, y], [x, y]] with y down-positive.
+    update(sticks) {
         const now = Date.now();
         for (const [i, [x, y]] of sticks.entries()) {
             if (Math.max(Math.abs(x), Math.abs(y)) <= GamepadDJ.kStickDeadzone) {
@@ -476,11 +441,12 @@ GamepadDJ.StickLayer = class {
         } else if (!moving) {
             this.stop();
         }
-        return true;
     }
 
-    targetFor(i) {
-        return this.axis[i] ? this.targets[this.axis[i]](i) : null;
+    // The targets stick i moves along its locked axis (a list: a combo pick
+    // moves several at once).
+    targetsFor(i) {
+        return this.axis[i] ? this.targets[this.axis[i]](i) : [];
     }
 
     tick() {
@@ -490,8 +456,8 @@ GamepadDJ.StickLayer = class {
         const travel = GamepadDJ.setting("faderTravelSeconds");
         const curve = GamepadDJ.setting("faderCurve");
         for (const [i, v] of this.value.entries()) {
-            const target = this.targetFor(i);
-            if (!target || this.slammed[i] || Math.abs(v) <= GamepadDJ.kStickDeadzone) {
+            const targets = this.targetsFor(i);
+            if (!targets.length || this.slammed[i] || Math.abs(v) <= GamepadDJ.kStickDeadzone) {
                 continue;
             }
             // Rescale past the dead zone so movement starts from zero, then
@@ -499,34 +465,26 @@ GamepadDJ.StickLayer = class {
             const push = Math.pow(
                 (Math.abs(v) - GamepadDJ.kStickDeadzone) / (1 - GamepadDJ.kStickDeadzone), curve);
             GamepadDJ.focus(i);
-            if (target.before) {
-                target.before(i);
-            }
-            const value = engine.getParameter(target.group, target.key) +
-                    Math.sign(v) * push * seconds / travel;
-            engine.setParameter(target.group, target.key, Math.max(0, Math.min(1, value)));
-            if (target.after) {
-                target.after(i);
+            for (const target of targets) {
+                const value = engine.getParameter(target.group, target.key) +
+                        Math.sign(v) * push * seconds / travel;
+                engine.setParameter(target.group, target.key, Math.max(0, Math.min(1, value)));
             }
         }
     }
 
     slam(i) {
-        const target = this.targetFor(i);
-        if (!target) {
+        const targets = this.targetsFor(i);
+        if (!targets.length) {
             return;
         }
         GamepadDJ.focus(i);
-        if (target.before) {
-            target.before(i);
-        }
         const up = this.value[i] > 0;
-        const end = up ?
-            (target.slamUp === undefined ? 1 : target.slamUp) :
-            (target.slamDown === undefined ? 0 : target.slamDown);
-        engine.setParameter(target.group, target.key, end);
-        if (target.after) {
-            target.after(i);
+        for (const target of targets) {
+            const end = up ?
+                (target.slamUp === undefined ? 1 : target.slamUp) :
+                (target.slamDown === undefined ? 0 : target.slamDown);
+            engine.setParameter(target.group, target.key, end);
         }
     }
 
@@ -536,47 +494,115 @@ GamepadDJ.StickLayer = class {
             this.timer = 0;
         }
     }
+
+    // The screen changed or the pick ended: drop any push in progress.
+    reset() {
+        this.stop();
+        this.axis = [null, null];
+        this.value = [0, 0];
+        this.slammed = [false, false];
+    }
 };
 
 /**
- * Sorts one stick's pushes in the base state (no modifier) between the
- * channel fader and the jog. Rest = undecided; the first report past
- * kFaderDecideRadius decides for the rest of the push: "fader" if the push
- * is within kFaderSectorDeg of straight up/down (the jog is told to wait for
- * the centre), "jog" otherwise (the jog grabs at grabRadius as always).
- * While L2 owns the sticks, block() parks the push until the next rest.
+ * The face-button picks. A tap on A / B / Y / X arms both sticks for the low
+ * / mid / high EQ or the channel fader. Pressing one while another is still
+ * held adds it (user, 2026-11-05: "A and B select 2 EQ bands"), so A+B moves
+ * low and mid together; a press with none held starts a new pick. Each
+ * stick then belongs either to
+ * its jog or to the pick, decided when it leaves rest (so a stick holding
+ * the platter at the tap keeps jogging until it lets go). Once both sticks
+ * have been at rest for pickHoldMs the pick ends and they are jogs again.
  */
-GamepadDJ.BasePush = class {
-    constructor(index) {
-        this.index = index;
-        this.mode = null; // null = at rest / undecided, "fader", "jog", "blocked"
+GamepadDJ.Picks = class {
+    constructor() {
+        this.pick = []; // the armed GamepadDJ.kPicks names; empty = jog
+        this.owner = [null, null]; // per stick while pushed: "jog" | "pick"
+        this.timer = 0;
+        this.layer = new GamepadDJ.StickLayer("pick",
+            {y: (i) => this.pick.map((name) => GamepadDJ.targets[name](i)), x: () => []});
     }
 
-    // x, y as SDL reports them (y down-positive). True while the fader owns
-    // this stick.
-    update(x, y) {
-        const r = Math.sqrt(x * x + y * y);
-        if (r <= GamepadDJ.kStickDeadzone) {
-            this.mode = null;
-            return false;
+    // add: keep what is armed (a combo), else replace it.
+    arm(name, add) {
+        if (!add) {
+            this.pick = [];
         }
-        // Never later than the jog's own grab (grabRadius can be set low).
-        const decideAt = Math.min(GamepadDJ.kFaderDecideRadius, GamepadDJ.setting("grabRadius"));
-        if (this.mode === null && r >= decideAt) {
-            const sector = Math.tan(GamepadDJ.kFaderSectorDeg * Math.PI / 180);
-            this.mode = Math.abs(x) <= Math.abs(y) * sector ? "fader" : "jog";
-            if (this.mode === "fader") {
-                GamepadDJ.jogs[this.index].suspend();
-                if (GamepadDJ.setting("logJog")) {
-                    console.log(`Gamepad DJ: deck ${this.index + 1} fader push`);
+        if (!this.pick.includes(name)) {
+            this.pick.push(name);
+        }
+        this.show();
+        console.log(`Gamepad DJ: sticks armed for ${this.pick.join(" + ")}`);
+        this.restartTimer();
+    }
+
+    disarm() {
+        this.stopTimer();
+        this.layer.reset();
+        if (this.pick.length) {
+            this.pick = [];
+            this.show();
+            console.log("Gamepad DJ: sticks back to jog");
+        }
+    }
+
+    // The screen changed: drop the pick, and sticks that are pushed now
+    // count as the jog's until they are back at rest.
+    reset() {
+        this.disarm();
+        this.owner = this.owner.map((o) => (o ? "jog" : null));
+    }
+
+    show() {
+        if (GamepadDJ.hasPickControl) {
+            // A bit per armed control: 1 low, 2 mid, 4 high, 8 fader.
+            engine.setValue("[OpenDecks]", "pick", this.pick.reduce(
+                (bits, name) => bits | (1 << GamepadDJ.kPicks.indexOf(name)), 0));
+        }
+    }
+
+    // sticks: [[x, y], [x, y]], y down-positive. Feeds the jogs and the layer.
+    update(sticks) {
+        for (const [i, [x, y]] of sticks.entries()) {
+            const resting = Math.sqrt(x * x + y * y) <= GamepadDJ.kStickDeadzone;
+            if (resting) {
+                this.owner[i] = null;
+            } else if (!this.owner[i]) {
+                this.owner[i] = this.pick.length ? "pick" : "jog";
+                if (this.owner[i] === "pick") {
+                    GamepadDJ.jogs[i].release();
                 }
             }
+            if (this.owner[i] !== "pick") {
+                GamepadDJ.jogs[i].update(x, y);
+            }
         }
-        return this.mode === "fader";
+        if (!this.pick.length) {
+            return;
+        }
+        this.layer.update(sticks.map((s, i) => (this.owner[i] === "pick" ? s : [0, 0])));
+        if (this.owner.includes("pick")) {
+            this.stopTimer();
+        } else if (!this.timer) {
+            this.restartTimer();
+        }
     }
 
-    block() {
-        this.mode = "blocked";
+    restartTimer() {
+        this.stopTimer();
+        this.timer = engine.beginTimer(GamepadDJ.setting("pickHoldMs"), () => {
+            this.timer = 0;
+            if (!this.owner.includes("pick")) {
+                this.disarm();
+            }
+        }, true);
+    }
+
+    stopTimer() {
+        if (this.timer) {
+            engine.stopTimer(this.timer);
+            this.timer = 0;
+        }
     }
 };
 
@@ -587,29 +613,6 @@ GamepadDJ.targets = {
     low: (i) => ({group: `[EqualizerRack1_[Channel${i + 1}]_Effect1]`, key: "parameter1", slamUp: 0.5}),
     mid: (i) => ({group: `[EqualizerRack1_[Channel${i + 1}]_Effect1]`, key: "parameter2", slamUp: 0.5}),
     high: (i) => ({group: `[EqualizerRack1_[Channel${i + 1}]_Effect1]`, key: "parameter3", slamUp: 0.5}),
-    // The deck's quick effect (a filter by default): left = low-pass, right =
-    // high-pass, centre = off. A slam either way snaps it back to neutral.
-    filter: (i) => ({
-        group: `[QuickEffectRack1_[Channel${i + 1}]]`, key: "super1", slamUp: 0.5, slamDown: 0.5,
-    }),
-    // The deck's effect unit: its wet/dry mix, switched on for the deck
-    // whenever the mix is above zero. Units start switched off with the mix
-    // at 100%, so a unit that's off for this deck counts as mix 0.
-    fx: (i) => ({
-        group: `[EffectRack1_EffectUnit${i + 1}]`,
-        key: "mix",
-        before: (deck) => {
-            const unit = `[EffectRack1_EffectUnit${deck + 1}]`;
-            if (!engine.getValue(unit, `group_[Channel${deck + 1}]_enable`)) {
-                engine.setParameter(unit, "mix", 0);
-            }
-        },
-        after: (deck) => {
-            const unit = `[EffectRack1_EffectUnit${deck + 1}]`;
-            engine.setValue(unit, `group_[Channel${deck + 1}]_enable`,
-                engine.getValue(unit, "mix") > 0 ? 1 : 0);
-        },
-    }),
 };
 
 // --- Touchpads -> FX XY pads -------------------------------------------
@@ -734,48 +737,97 @@ GamepadDJ.loadSelected = function(deck) {
     engine.setValue(`[Channel${deck}]`, "LoadSelectedTrack", 1);
 };
 
-// Returns true if the button belonged to the library layer.
-GamepadDJ.libraryButton = function(bit, pressed, buttons) {
+// An empty deck first, then one that isn't playing.
+GamepadDJ.loadSelectedAnywhere = function() {
+    const decks = [1, 2];
+    const deck =
+        decks.find((d) => !engine.getValue(`[Channel${d}]`, "track_loaded")) ||
+        decks.find((d) => !engine.getValue(`[Channel${d}]`, "play"));
+    if (deck) {
+        GamepadDJ.loadSelected(deck);
+    }
+};
+
+GamepadDJ.movePlaylist = function(direction) {
+    if (GamepadDJ.setting("logJog")) {
+        console.log(`Gamepad DJ: playlist ${direction < 0 ? "up" : "down"}`);
+    }
+    // Upstream's sidebar controls; the touch Library listens to them (the
+    // classic sidebar widget doesn't exist in the touch UI, so Mixxx itself
+    // ignores them there).
+    engine.setValue("[Playlist]", direction < 0 ? "SelectPrevPlaylist" : "SelectNextPlaylist", 1);
+};
+
+/**
+ * One stick scrolling a list in the browse layout. Up or down past
+ * kListStickOn takes one step at once, then repeats while the stick is held,
+ * every rates.slowMs at the threshold down to rates.fastMs at full push (the
+ * interval is re-read each step, so pushing further speeds it up). Below
+ * kListStickOff it stops. step(direction) is called with -1 = up, +1 = down.
+ */
+GamepadDJ.ListStick = class {
+    constructor(rates, step) {
+        this.rates = rates;
+        this.step = step;
+        this.direction = 0;
+        this.push = 0;
+        this.timer = 0;
+        this.waitForRest = false;
+    }
+
+    // y as SDL reports it (down-positive).
+    update(y) {
+        const push = Math.abs(y);
+        if (this.waitForRest) {
+            if (push > GamepadDJ.kStickDeadzone) {
+                return;
+            }
+            this.waitForRest = false;
+        }
+        this.push = push;
+        if (this.direction && push < GamepadDJ.kListStickOff) {
+            this.stop();
+        } else if (!this.direction && push >= GamepadDJ.kListStickOn) {
+            this.direction = Math.sign(y);
+            this.step(this.direction);
+            this.schedule();
+        } else if (this.direction && Math.sign(y) !== this.direction) {
+            this.stop(); // flicked straight through to the other side
+        }
+    }
+
+    schedule() {
+        const span = Math.max(0, Math.min(1,
+            (this.push - GamepadDJ.kListStickOn) / (1 - GamepadDJ.kListStickOn)));
+        const ms = this.rates.slowMs + (this.rates.fastMs - this.rates.slowMs) * span;
+        this.timer = engine.beginTimer(Math.round(ms), () => {
+            this.timer = 0;
+            if (this.direction) {
+                this.step(this.direction);
+                this.schedule();
+            }
+        }, true);
+    }
+
+    stop() {
+        this.direction = 0;
+        if (this.timer) {
+            engine.stopTimer(this.timer);
+            this.timer = 0;
+        }
+    }
+
+    // The screen changed: stop, and ignore the stick until it is back at rest.
+    reset() {
+        this.stop();
+        this.waitForRest = true;
+    }
+};
+
+// The browse layout's buttons (Library, Settings). Everything not listed
+// here does nothing on those screens.
+GamepadDJ.browseButton = function(bit, pressed) {
     const B = GamepadDJ.Button;
-    if (bit === B.back) {
-        if (pressed) {
-            // An empty deck first, then one that isn't playing.
-            const decks = [1, 2];
-            const deck =
-                decks.find((d) => !engine.getValue(`[Channel${d}]`, "track_loaded")) ||
-                decks.find((d) => !engine.getValue(`[Channel${d}]`, "play"));
-            if (deck) {
-                GamepadDJ.loadSelected(deck);
-            }
-        }
-        return true;
-    }
-    const browsing = (buttons & (1 << B.start)) !== 0;
-    if (bit === B.start) {
-        if (pressed) {
-            // [Library] MoveUp/MoveDown act on whichever library pane has
-            // keyboard focus; after a click on a knob or deck that's none of
-            // them, and scrolling silently does nothing.
-            if (engine.getValue("[Library]", "focused_widget") !== GamepadDJ.kFocusTracks) {
-                engine.setValue("[Library]", "focused_widget", GamepadDJ.kFocusTracks);
-            }
-        } else {
-            GamepadDJ.stopScroll();
-        }
-        return true;
-    }
-    if (!browsing && !(bit === B.dpadUp || bit === B.dpadDown) ) {
-        return false;
-    }
-    if (!browsing) {
-        // D-pad up/down outside the browse layer belong to deck 1; make sure
-        // a scroll started in the layer stops when its button comes up.
-        if (!pressed && GamepadDJ.scrollTimer) {
-            GamepadDJ.stopScroll();
-            return true;
-        }
-        return false;
-    }
     switch (bit) {
     case B.dpadUp:
     case B.dpadDown:
@@ -784,16 +836,84 @@ GamepadDJ.libraryButton = function(bit, pressed, buttons) {
         } else {
             GamepadDJ.stopScroll();
         }
-        return true;
-    case B.dpadLeft:
-    case B.dpadRight:
+        break;
+    case B.leftShoulder:
+    case B.rightShoulder:
         if (pressed) {
-            GamepadDJ.loadSelected(bit === B.dpadLeft ? 1 : 2);
+            GamepadDJ.loadSelected(bit === B.leftShoulder ? 1 : 2);
         }
-        return true;
-    default:
+        break;
+    case B.south:
+        if (pressed) {
+            GamepadDJ.loadSelectedAnywhere();
+        }
+        break;
+    }
+};
+
+// Options / Create = next / previous screen, on every screen. True if the
+// button was one of them.
+GamepadDJ.tabButton = function(bit, pressed) {
+    const B = GamepadDJ.Button;
+    if (bit !== B.start && bit !== B.back) {
         return false;
     }
+    if (pressed) {
+        const key = bit === B.start ? "tab_next" : "tab_prev";
+        engine.setValue("[OpenDecks]", key, 1);
+        engine.setValue("[OpenDecks]", key, 0);
+    }
+    return true;
+};
+
+// A bumper's cue press on deck index (Mixxx's cue_default; released when
+// the bumper comes up).
+GamepadDJ.cue = function(bit, index) {
+    GamepadDJ.focus(index);
+    engine.setValue(`[Channel${index + 1}]`, "cue_default", 1);
+    GamepadDJ.bumperAction[bit] = "cue";
+};
+
+GamepadDJ.cancelCueHold = function(bit) {
+    if (GamepadDJ.cueTimer[bit]) {
+        engine.stopTimer(GamepadDJ.cueTimer[bit]);
+        GamepadDJ.cueTimer[bit] = 0;
+    }
+};
+
+// Called whenever [OpenDecks] tab changes (from the controller or a tap on
+// screen). Switching between the performance and the browse layout lets go
+// of everything the other one was doing.
+GamepadDJ.setScreen = function(tab) {
+    const browsing = GamepadDJ.kBrowseTabs.includes(Math.round(tab));
+    if (browsing === GamepadDJ.browsing) {
+        return;
+    }
+    GamepadDJ.browsing = browsing;
+    console.log(`Gamepad DJ: ${browsing ? "browse" : "performance"} controls (tab ${tab})`);
+    GamepadDJ.releaseAll();
+};
+
+// Let go of everything in progress, in both layouts. Sticks that are pushed
+// right now must come back to rest before they do anything again.
+GamepadDJ.releaseAll = function() {
+    GamepadDJ.stopScroll();
+    for (const list of GamepadDJ.listSticks) {
+        list.reset();
+    }
+    GamepadDJ.picks.reset();
+    for (const jog of GamepadDJ.jogs) {
+        jog.suspend();
+    }
+    for (const bit of Object.keys(GamepadDJ.bumperAction)) {
+        if (GamepadDJ.bumperAction[bit] === "cue") {
+            engine.setValue(`[Channel${Number(bit) === GamepadDJ.Button.leftShoulder ? 1 : 2}]`, "cue_default", 0);
+        }
+        GamepadDJ.cancelCueHold(bit);
+        // Still held: its release belongs to nobody now.
+        GamepadDJ.bumperAction[bit] = "done";
+    }
+    GamepadDJ.touchPads.releaseAll();
 };
 
 // --- Lifecycle and input -----------------------------------------------
@@ -801,32 +921,20 @@ GamepadDJ.libraryButton = function(bit, pressed, buttons) {
 GamepadDJ.init = function(id) {
     const B = GamepadDJ.Button;
     GamepadDJ.jogs = [new GamepadDJ.Jog(1), new GamepadDJ.Jog(2)];
-    const T = GamepadDJ.targets;
-    // L2 + stick (user, 2026-10-27, one layer): up/down = the EQ band picked
-    // with that deck's buttons, left/right = filter. R2 is free. (Tempo stays
-    // off the controller: sync, or the touch fader.)
-    GamepadDJ.layer = new GamepadDJ.StickLayer("L2",
-        {y: (i) => T[GamepadDJ.bandName()](i), x: T.filter});
-    // One EQ pick for both decks (user, 2026-10-27: "A/B/Y select both
-    // channels' EQ at the same time, that feels intuitive and opens up the
-    // D-pad"): 1 low, 2 mid, 3 high. Sticky; the thumb can't hold a button
-    // and push the stick. Works with L2 held too.
-    GamepadDJ.band = 1;
-    GamepadDJ.bandButton = {[B.south]: 1, [B.east]: 2, [B.north]: 3};
-    // No modifier: a straight up/down push is the channel fader (speed,
-    // curve and slam as in the layers); everything else is the jog. The
-    // layer is switched on once and fed only the sticks BasePush gives it.
-    GamepadDJ.faderLayer = new GamepadDJ.StickLayer("fader", {y: T.fader, x: () => null});
-    GamepadDJ.basePushes = [new GamepadDJ.BasePush(0), new GamepadDJ.BasePush(1)];
+    // A / B / Y / X arm the sticks (user, 2026-11-05); see GamepadDJ.Picks.
+    GamepadDJ.pickButton = {[B.south]: "low", [B.east]: "mid", [B.north]: "high", [B.west]: "fader"};
+    GamepadDJ.pickMask = Object.keys(GamepadDJ.pickButton).reduce((m, b) => m | (1 << Number(b)), 0);
+    GamepadDJ.picks = new GamepadDJ.Picks();
+    // The highlight on screen needs a build with [OpenDecks] pick (2026-11-05);
+    // older ones just don't show it.
+    GamepadDJ.hasPickControl = Boolean(engine.makeConnection("[OpenDecks]", "pick", () => {}));
+    GamepadDJ.picks.show();
     GamepadDJ.decks = [
-        // Deck 1 = D-pad, deck 2 = face buttons (user, 2026-10-26):
-        //   left / X   = FX on/off      down / A = select low EQ
-        //   right / B  = select mid     up / Y   = select high
-        // Cue is on the bumpers; play on the stick clicks. Vinyl mode, sync
-        // and loops are on the touch UI (seldom used -> not under a thumb).
-        new GamepadDJ.Deck(1, {play: B.leftStick, fxOn: B.dpadLeft}),
-        new GamepadDJ.Deck(2, {play: B.rightStick, fxOn: B.west}),
-        // D-pad up / down / right are free (outside the Options browse layer).
+        // Cue is on the bumpers, the picks on the face buttons. Vinyl mode,
+        // sync, loops and FX on/off are on the touch UI and touchpads (seldom
+        // used -> not under a thumb). The D-pad is free.
+        new GamepadDJ.Deck(1, {play: B.leftStick}),
+        new GamepadDJ.Deck(2, {play: B.rightStick}),
     ];
     GamepadDJ.deckOfButton = {};
     for (const [index, deck] of GamepadDJ.decks.entries()) {
@@ -846,7 +954,20 @@ GamepadDJ.init = function(id) {
     GamepadDJ.lastButtons = 0;
     GamepadDJ.scrollTimer = 0;
     GamepadDJ.focusedDeck = 0;
-    GamepadDJ.bumperAction = {}; // per bumper bit: "cue" | "set" | "tab" while held
+    GamepadDJ.bumperAction = {}; // per bumper bit: "pending" | "cue" | "set" | "done" while held
+    GamepadDJ.cueTimer = {}; // per bumper bit: the hold timer on a playing deck
+    // Browse layout: left stick = tracks, right stick = playlists.
+    GamepadDJ.listSticks = [
+        new GamepadDJ.ListStick(GamepadDJ.kTrackListMs, GamepadDJ.scroll),
+        new GamepadDJ.ListStick(GamepadDJ.kPlaylistMs, GamepadDJ.movePlaylist),
+    ];
+    // Follow the touch UI's screen. The classic UI has no [OpenDecks] tab, so
+    // it keeps the performance layout.
+    GamepadDJ.browsing = false;
+    const tabConn = engine.makeConnection("[OpenDecks]", "tab", (v) => GamepadDJ.setScreen(v));
+    if (tabConn) {
+        tabConn.trigger();
+    }
     console.log(`Gamepad DJ: ready on ${id}`);
     if (GamepadDJ.setting("logJog")) {
         const names = ["secondsPerTurn", "nudgeSensitivity", "grabRadius", "holdRadius",
@@ -857,19 +978,8 @@ GamepadDJ.init = function(id) {
 };
 
 GamepadDJ.shutdown = function() {
-    GamepadDJ.stopScroll();
-    GamepadDJ.layer.stop();
-    GamepadDJ.faderLayer.stop();
-    for (const bit of Object.keys(GamepadDJ.bumperAction)) {
-        if (GamepadDJ.bumperAction[bit] === "cue") {
-            engine.setValue(`[Channel${Number(bit) === GamepadDJ.Button.leftShoulder ? 1 : 2}]`, "cue_default", 0);
-        }
-    }
+    GamepadDJ.releaseAll();
     GamepadDJ.bumperAction = {};
-    for (const jog of GamepadDJ.jogs) {
-        jog.release();
-    }
-    GamepadDJ.touchPads.releaseAll();
 };
 
 GamepadDJ.incomingData = function(data, length) {
@@ -896,25 +1006,18 @@ GamepadDJ.incomingData = function(data, length) {
             `right r=${r(axis(2), axis(3))} buttons=${buttons.toString(16)}`);
     }
 
-    // L2 (axis 4) owns the sticks while held; R2 (axis 5) does nothing.
+    // L2 and R2 (axes 4 and 5) do nothing.
     const sticks = [[axis(0), axis(1)], [axis(2), axis(3)]];
-    if (GamepadDJ.layer.update(axis(4), sticks)) {
-        for (const push of GamepadDJ.basePushes) {
-            push.block();
+    if (GamepadDJ.browsing) {
+        // Browse layout: the sticks scroll lists (only up/down counts).
+        for (const [i, [, y]] of sticks.entries()) {
+            GamepadDJ.listSticks[i].update(y);
         }
     } else {
-        // Base state: each stick's push is either the fader's or the jog's.
-        const faderSticks = sticks.map(([x, y], i) =>
-            GamepadDJ.basePushes[i].update(x, y) ? [x, y] : [0, 0]);
-        GamepadDJ.faderLayer.update(1, faderSticks);
-        for (const [i, [x, y]] of sticks.entries()) {
-            if (GamepadDJ.basePushes[i].mode !== "fader") {
-                GamepadDJ.jogs[i].update(x, y);
-            }
-        }
+        GamepadDJ.picks.update(sticks);
     }
 
-    if (version >= 2 && length >= GamepadDJ.kReportSize) {
+    if (version >= 2 && length >= GamepadDJ.kReportSize && !GamepadDJ.browsing) {
         const touchpads = view.getUint8(21);
         const fingers = [];
         for (let slot = 0; slot < GamepadDJ.kMaxTouchpads * GamepadDJ.kMaxFingers; slot++) {
@@ -934,54 +1037,68 @@ GamepadDJ.incomingData = function(data, length) {
         return;
     }
     const B = GamepadDJ.Button;
+    // A pick press starts a new pick unless a pick button was already held
+    // (a combo); buttons pressed together in one report all join it.
+    let newPick = !((buttons ^ changed) & GamepadDJ.pickMask);
     for (let bit = 0; bit < 32; bit++) {
         if (!(changed & (1 << bit))) {
             continue;
         }
         const pressed = (buttons & (1 << bit)) !== 0;
-        if (GamepadDJ.libraryButton(bit, pressed, buttons)) {
+        if (GamepadDJ.tabButton(bit, pressed)) {
+            continue;
+        }
+        if (GamepadDJ.browsing) {
+            if (!pressed) {
+                delete GamepadDJ.bumperAction[bit]; // a cue press from before the switch
+            }
+            GamepadDJ.browseButton(bit, pressed);
             continue;
         }
         if (bit === B.leftShoulder || bit === B.rightShoulder) {
             // Bumpers (user, 2026-10-26): L1 = deck 1's cue, R1 = deck 2's,
             // with Mixxx's normal cue behaviour. While that side's stick holds
-            // the platter a tap sets the cue right there instead. With the top
-            // bar focused on screen they switch tabs. (They may go back to
-            // being nudge buttons if stray cue presses turn out to be a problem.)
+            // the platter a tap sets the cue right there instead. On a playing
+            // deck the cue only fires once the bumper has been held for
+            // cueHoldMs (user, 2026-11-05: "tapping cue shouldn't stop a
+            // playing track, the bumpers are too easy to touch"), so a brush
+            // does nothing; a stopped deck cues on the press as before.
             const index = bit === B.leftShoulder ? 0 : 1;
             const jog = GamepadDJ.jogs[index];
             const group = `[Channel${index + 1}]`;
             if (pressed) {
-                if (GamepadDJ.uiFocus() === 3) {
-                    const key = bit === B.leftShoulder ? "tab_prev" : "tab_next";
-                    console.log(`Gamepad DJ: ${key} (top bar focused, tab ${engine.getValue("[OpenDecks]", "tab")})`);
-                    engine.setValue("[OpenDecks]", key, 1);
-                    engine.setValue("[OpenDecks]", key, 0);
-                    GamepadDJ.bumperAction[bit] = "tab";
-                } else if (jog.grabbed) {
+                if (jog.grabbed) {
                     engine.setValue(group, "cue_set", 1);
                     console.log(`Gamepad DJ: deck ${index + 1} cue set`);
                     GamepadDJ.bumperAction[bit] = "set";
+                } else if (engine.getValue(group, "play") && GamepadDJ.setting("cueHoldMs") > 0) {
+                    GamepadDJ.bumperAction[bit] = "pending";
+                    GamepadDJ.cueTimer[bit] = engine.beginTimer(GamepadDJ.setting("cueHoldMs"), () => {
+                        GamepadDJ.cueTimer[bit] = 0;
+                        if (GamepadDJ.bumperAction[bit] === "pending") {
+                            console.log(`Gamepad DJ: deck ${index + 1} cue held, back to the cue point`);
+                            GamepadDJ.cue(bit, index);
+                        }
+                    }, true);
                 } else {
-                    GamepadDJ.focus(index);
-                    engine.setValue(group, "cue_default", 1);
-                    GamepadDJ.bumperAction[bit] = "cue";
+                    GamepadDJ.cue(bit, index);
                 }
             } else {
                 // Release only what the press started: a cue press must get
-                // its release (preview stops), a tab or set tap must not
+                // its release (preview stops), a set tap must not
                 // release a cue it never pressed.
                 if (GamepadDJ.bumperAction[bit] === "cue") {
                     engine.setValue(group, "cue_default", 0);
                 }
+                GamepadDJ.cancelCueHold(bit);
                 delete GamepadDJ.bumperAction[bit];
             }
             continue;
         }
-        if (GamepadDJ.bandButton[bit] !== undefined) {
+        if (GamepadDJ.pickButton[bit] !== undefined) {
             if (pressed) {
-                GamepadDJ.band = GamepadDJ.bandButton[bit];
-                console.log(`Gamepad DJ: L2 up/down now controls the ${GamepadDJ.bandName()} EQ on both decks`);
+                GamepadDJ.picks.arm(GamepadDJ.pickButton[bit], !newPick);
+                newPick = false;
             }
             continue;
         }
