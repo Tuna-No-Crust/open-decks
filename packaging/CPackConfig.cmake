@@ -60,4 +60,9 @@ if(CPACK_GENERATOR STREQUAL "AppImage")
   # CPACK_PACKAGE_ICON must be the bare file name of an installed icon matching
   # the Icon= key in the desktop file (which is "mixxx").
   set(CPACK_PACKAGE_ICON "mixxx.png")
+  # Open Decks: where AppImage updaters (AppImageUpdate, Gear Lever) look for
+  # new releases. Each GitHub release carries OpenDecks-x86_64.AppImage and
+  # its .zsync, which packaging/open-decks/build-appimage.sh writes.
+  set(CPACK_APPIMAGE_UPDATE_INFORMATION
+      "gh-releases-zsync|Tuna-No-Crust|open-decks|latest|OpenDecks-x86_64.AppImage.zsync")
 endif()

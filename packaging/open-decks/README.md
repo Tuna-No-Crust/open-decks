@@ -14,13 +14,26 @@ docker run --rm --platform linux/amd64 -v open-decks-linux:/work -v "$PWD:/work/
   -v "$PWD/packaging/open-decks/build-appimage.sh:/usr/local/bin/build-appimage.sh:ro" \
   -e JOBS=6 open-decks-appimage build-appimage.sh
 docker run --rm --platform linux/amd64 -v open-decks-linux:/work -v "$PWD/dist:/dist" open-decks-appimage \
-  bash -c 'cp "$(ls -t /work/build-appimage/*.AppImage | head -1)" /dist/OpenDecks-x86_64.AppImage'
+  bash -c 'cp /work/build-appimage/OpenDecks-x86_64.AppImage* /dist/'
 ```
 
 Run from the repository root. The volume keeps the downloaded dependency
 bundle, the build tree and ccache, so later builds take minutes. The
 dependency bundle is the one upstream's `tools/appimage_buildenv.sh` names,
 downloaded from downloads.mixxx.org.
+
+## Releases and updates
+
+The AppImage carries update information pointing at this repository's
+latest GitHub release (`CPACK_APPIMAGE_UPDATE_INFORMATION` in
+`packaging/CPackConfig.cmake`), so AppImageUpdate, Gear Lever and similar
+tools can update it, downloading only the changed blocks. For that, every
+release must carry both `OpenDecks-x86_64.AppImage` and
+`OpenDecks-x86_64.AppImage.zsync` under exactly those names:
+
+```bash
+gh release create vX.Y.Z dist/OpenDecks-x86_64.AppImage dist/OpenDecks-x86_64.AppImage.zsync
+```
 
 ## Steam artwork
 

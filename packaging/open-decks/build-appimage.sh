@@ -31,4 +31,10 @@ cmake -B "$B" -DCMAKE_BUILD_TYPE=RelWithDebInfo \
 cmake --build "$B" --parallel "${JOBS:-6}"
 cd "$B"
 cpack -G AppImage
-ls -la "$B"/*.AppImage
+# The release name, and its .zsync for delta updates. zsyncmake runs on the
+# renamed file so the .zsync points at the name the release asset carries
+# (the update information baked in by CPackConfig.cmake names that file).
+cp "$(ls -t "$B"/mixxx*.AppImage | head -1)" "$B/OpenDecks-x86_64.AppImage"
+PATH="/opt/appimagetool/usr/bin:$PATH" \
+  zsyncmake -u OpenDecks-x86_64.AppImage -o OpenDecks-x86_64.AppImage.zsync OpenDecks-x86_64.AppImage
+ls -la "$B"/*.AppImage "$B"/*.zsync
