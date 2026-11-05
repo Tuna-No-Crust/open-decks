@@ -5,9 +5,12 @@ import QtQuick.Layouts
 import "." as OD
 
 // One deck's effect unit: effect unit N on channel N, with the built-in
-// effect in slot 1. The XY pad plays it: X = the effect's main parameter,
-// Y = wet amount; touching switches the unit onto the deck, lifting switches
-// it off again unless Hold is on. Effect chips swap what's in slot 1.
+// effect in slot 1 (and slot 2 for chains such as Dub). The XY pad plays two
+// of the effect's parameters (FxCatalog says which); the wet amount comes
+// from the catalog and the WET fader. Touching switches the unit onto the
+// deck, lifting switches it off again unless Hold is on; echoes and reverb
+// ring out first (`trail`). Roll drives the deck's slip loop roll instead.
+// Effect chips swap what's loaded.
 // The controller's touchpad plays the same pad through [OpenDecks] fxN_touch /
 // fxN_x / fxN_y (set by the gamepad mapping), with the same press / move /
 // release logic as a finger on the screen.
@@ -40,12 +43,13 @@ Rectangle {
     // Hold button or the controller's FX toggle (user, 2026-10-26: a lift
     // must not reset a unit that was toggled on; without the toggle, touch =
     // on, lift = off). One state, however it was switched on.
-    readonly property bool hold: enableOnDeck.value > 0 && !pad.touched
+    readonly property bool hold: enableOnDeck.value > 0 && !pad.touched && !trailTimer.running
     // Decided when a finger lands: was the unit already on (toggled/held)?
     // Then lifting leaves it on, and X/Y stay where the finger left them.
     property bool keepOnAfterLift: false
 
     function setHold(on) {
+        endTrail(false);
         if (on) {
             slotEnabled.value = 1;
             enableOnDeck.value = 1;
@@ -95,25 +99,120 @@ Rectangle {
         group: root.slotGroup
         key: "enabled"
     }
-    // The slot's first three parameters, for the catalog presets.
+    Mixxx.ControlProxy {
+        id: mixMode
+
+        group: root.unitGroup
+        key: "mix_mode"
+    }
+    // Slot 1's parameters (index = parameter number), for presets and axes.
     Mixxx.ControlProxy { id: param1; group: root.slotGroup; key: "parameter1" }
     Mixxx.ControlProxy { id: param2; group: root.slotGroup; key: "parameter2" }
     Mixxx.ControlProxy { id: param3; group: root.slotGroup; key: "parameter3" }
+    Mixxx.ControlProxy { id: param4; group: root.slotGroup; key: "parameter4" }
+    Mixxx.ControlProxy { id: param5; group: root.slotGroup; key: "parameter5" }
+    readonly property var params: [null, param1, param2, param3, param4, param5]
+    // Slot 2, for chains.
+    readonly property string slot2Group: "[EffectRack1_EffectUnit" + deckNumber + "_Effect2]"
+    Mixxx.ControlProxy { id: slot2Enabled; group: root.slot2Group; key: "enabled" }
+    Mixxx.ControlProxy { id: s2param1; group: root.slot2Group; key: "parameter1" }
+    Mixxx.ControlProxy { id: s2param2; group: root.slot2Group; key: "parameter2" }
+    Mixxx.ControlProxy { id: s2param3; group: root.slot2Group; key: "parameter3" }
+    readonly property var slot2Params: [null, s2param1, s2param2, s2param3]
 
-    Mixxx.ControlProxy {
-        id: xParam
+    // The proxies the pad's axes act on (null for Roll's X).
+    readonly property var xProxy: axisProxy(effect?.x)
+    readonly property var yProxy: axisProxy(effect?.y)
 
-        group: root.slotGroup
-        key: "parameter" + (root.effect?.xParam ?? 1)
+    function axisProxy(axis) {
+        if (!axis) {
+            return null;
+        }
+        if (axis.mix) {
+            return mix;
+        }
+        return axis.param ? params[axis.param] : null;
+    }
+    // Pad positions 0..1, read back from the parameters so the ring follows
+    // the beat chips too. Roll's X has no parameter: the last finger position.
+    property real rollX: 0.5
+    readonly property real xPos: !effect ? 0.5
+        : (xProxy ? OD.FxCatalog.axisPosition(effect.x, xProxy.value, xProxy.parameter) : rollX)
+    readonly property real yPos: effect && yProxy
+        ? OD.FxCatalog.axisPosition(effect.y, yProxy.value, yProxy.parameter) : 0.5
+
+    function applyAxis(axis, proxy, pos) {
+        if (!proxy) {
+            return;
+        }
+        const t = OD.FxCatalog.axisTarget(axis, pos);
+        if (t.parameter !== undefined) {
+            proxy.parameter = t.parameter;
+        } else {
+            proxy.value = t.value;
+        }
+    }
+
+    // Roll: the deck's beatlooproll_<size>_activate, one proxy per size (the
+    // control names are fixed). rollSize = the roll held now, 0 = none.
+    property real rollSize: 0
+    Mixxx.ControlProxy { id: roll0; group: root.channel; key: "beatlooproll_0.0625_activate" }
+    Mixxx.ControlProxy { id: roll1; group: root.channel; key: "beatlooproll_0.125_activate" }
+    Mixxx.ControlProxy { id: roll2; group: root.channel; key: "beatlooproll_0.25_activate" }
+    Mixxx.ControlProxy { id: roll3; group: root.channel; key: "beatlooproll_0.5_activate" }
+    Mixxx.ControlProxy { id: roll4; group: root.channel; key: "beatlooproll_1_activate" }
+    readonly property var rollProxies: ({ "0.0625": roll0, "0.125": roll1, "0.25": roll2, "0.5": roll3, "1": roll4 })
+
+    function setRoll(size) {
+        if (size === rollSize) {
+            return;
+        }
+        // Start the new size before letting go of the old one: Mixxx keeps a
+        // stack of held rolls, so the loop changes size without dropping out
+        // of slip mode in between.
+        const previous = rollSize;
+        rollSize = size;
+        if (size > 0) {
+            rollProxies[String(size)].value = 1;
+        }
+        if (previous > 0) {
+            rollProxies[String(previous)].value = 0;
+        }
+    }
+
+    // Echo / Reverb tails: on lift the send closes, the unit stays on for the
+    // effect's `trail`, then goes off. A touch or Hold in the meantime takes
+    // over (send back open).
+    Timer {
+        id: trailTimer
+
+        onTriggered: root.endTrail(true)
+    }
+    function endTrail(switchOff) {
+        const wasTrailing = trailTimer.running || switchOff;
+        trailTimer.stop();
+        if (!wasTrailing) {
+            return;
+        }
+        if (switchOff) {
+            root.allUnitsOff();
+        }
+        if (root.effect?.sendParam) {
+            root.params[root.effect.sendParam].value = root.effect.preset[root.effect.sendParam];
+        }
     }
 
     // A fresh profile starts with empty units; give each deck something to
     // play straight away (unit 1 Echo, unit 2 Reverb, like the mockup).
     // Mixxx also routes unit N onto deck N from the start; here the pad (or
     // Hold) is what switches a unit on, so begin with it off.
+    // On every start the chosen effect's preset is applied again (wet, mix
+    // mode, chain): the saved profile may hold anything, including effects
+    // that left the catalog.
     Component.onCompleted: {
-        if (root.slot && root.slot.effectId === "") {
-            selectEffect(root.deckNumber === 1 ? 0 : 1);
+        if (root.slot) {
+            const saved = OD.FxCatalog.indexOfId(root.slot.effectId);
+            selectEffect(saved >= 0 ? saved : (root.deckNumber === 1 ? 0 : 2));
         }
         allUnitsOff();
     }
@@ -122,16 +221,34 @@ Rectangle {
     // the controller's touchpad.
     function padPress() {
         OD.UiState.focusDeck(root.deckNumber);
-        keepOnAfterLift = enableOnDeck.value > 0;
+        const trailing = trailTimer.running;
+        endTrail(false);
+        keepOnAfterLift = enableOnDeck.value > 0 && !trailing;
         slotEnabled.value = 1;
         enableOnDeck.value = 1;
     }
     function padMove(x, y) {
-        xParam.parameter = x;
-        mix.parameter = y;
+        if (!root.effect) {
+            return;
+        }
+        if (root.effect.x.roll) {
+            root.rollX = x;
+            setRoll(OD.FxCatalog.rollSize(root.effect.x, x));
+        } else {
+            applyAxis(root.effect.x, root.xProxy, x);
+        }
+        applyAxis(root.effect.y, root.yProxy, y);
     }
     function padRelease() {
-        if (!keepOnAfterLift) {
+        setRoll(0);
+        if (keepOnAfterLift) {
+            return;
+        }
+        if (root.effect?.trail) {
+            root.params[root.effect.sendParam].value = 0;
+            trailTimer.interval = root.effect.trail;
+            trailTimer.start();
+        } else {
             root.allUnitsOff();
         }
     }
@@ -183,23 +300,33 @@ Rectangle {
             return;
         }
         const entry = OD.FxCatalog.effects[index];
+        endTrail(trailTimer.running);
+        setRoll(0);
         root.catalogIndex = index;
         if (root.slot.effectId !== entry.id) {
             root.slot.effectId = entry.id;
         }
-        if (entry.preset) {
-            const params = [null, param1, param2, param3];
-            for (const n in entry.preset) {
-                params[n].parameter = entry.preset[n];
-            }
+        for (const n in entry.preset) {
+            root.params[n].value = entry.preset[n];
         }
-        // Slots 2 and 3 may hold whatever the saved chain preset put there;
-        // this panel offers one effect per unit, so keep them empty.
+        mixMode.value = entry.mixMode;
+        mix.value = entry.wet;
+        // Slot 2 holds the chain's second effect, if any; anything else the
+        // saved chain preset put in slots 2-3 goes.
         for (let n = 2; n <= 3; ++n) {
             const other = Mixxx.EffectsManager.getEffectSlot(root.deckNumber, n);
-            if (other && other.effectId !== "") {
-                other.effectId = "";
+            const wanted = n === 2 && entry.chain ? entry.chain.id : "";
+            if (other && other.effectId !== wanted) {
+                other.effectId = wanted;
             }
+        }
+        if (entry.chain) {
+            for (const n in entry.chain.preset) {
+                root.slot2Params[n].value = entry.chain.preset[n];
+            }
+            slot2Enabled.value = 1;
+        } else {
+            slot2Enabled.value = 0;
         }
     }
 
@@ -252,10 +379,10 @@ Rectangle {
             accent: root.accent
             active: root.active
             remoteTouched: padTouch.value > 0
-            xLabel: root.effect?.xLabel ?? "parameter 1"
-            xValue: xParam.parameter
-            yLabel: "wet"
-            yValue: mix.parameter
+            xLabel: root.effect?.xLabel ?? ""
+            xValue: root.xPos
+            yLabel: root.effect?.yLabel ?? ""
+            yValue: root.yPos
 
             onPressed: root.padPress()
             onMoved: (x, y) => root.padMove(x, y)

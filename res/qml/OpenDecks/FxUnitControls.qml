@@ -5,7 +5,8 @@ import QtQuick.Layouts
 import "." as OD
 
 // The centre-column controls of one effect unit: beat chips for its tempo
-// parameter (Echo's delay, Flanger's speed...), Hold, and the dry/wet mode.
+// parameter (Echo's delay, Flanger's speed...), Hold, and the WET fader (the
+// unit's mix; each effect starts at its own amount and mix mode, FxCatalog).
 ColumnLayout {
     id: root
 
@@ -24,10 +25,10 @@ ColumnLayout {
         key: "parameter" + (root.effect?.beatsParam || 1)
     }
     Mixxx.ControlProxy {
-        id: mixMode
+        id: mix
 
         group: root.unit.unitGroup
-        key: "mix_mode"
+        key: "mix"
     }
 
     Text {
@@ -85,8 +86,8 @@ ColumnLayout {
         Button {
             id: holdButton
 
-            Layout.fillWidth: true
             Layout.preferredHeight: OD.Tokens.minTouch
+            Layout.preferredWidth: 88
             Accessible.name: "Hold effect " + root.deckNumber
             checkable: true
             checked: root.unit.hold
@@ -107,30 +108,61 @@ ColumnLayout {
                 verticalAlignment: Text.AlignVCenter
             }
         }
-        Button {
-            id: modeButton
-
-            readonly property bool dryPlusWet: mixMode.value > 0
+        Text {
+            color: OD.Tokens.textMuted
+            font.bold: true
+            font.letterSpacing: 1
+            font.pixelSize: 11
+            text: "WET"
+        }
+        Slider {
+            id: wetSlider
 
             Layout.fillWidth: true
             Layout.preferredHeight: OD.Tokens.minTouch
-            Accessible.name: "Mix mode"
+            Accessible.name: "Effect " + root.deckNumber + " wet"
+            from: 0
+            to: 1
+            live: true
+            value: mix.value
 
-            onClicked: mixMode.value = dryPlusWet ? 0 : 1
+            onMoved: mix.value = value
 
-            background: Rectangle {
-                border.color: OD.Tokens.selected
-                color: modeButton.down ? OD.Tokens.selected : OD.Tokens.raised
-                radius: 8
+            background: Item {
+                Rectangle {
+                    color: OD.Tokens.raised
+                    height: 4
+                    radius: 2
+                    width: parent.width - OD.Tokens.minTouch
+                    x: OD.Tokens.minTouch / 2
+                    y: parent.height / 2 - 2
+
+                    Rectangle {
+                        color: root.accent
+                        height: parent.height
+                        radius: 2
+                        width: wetSlider.visualPosition * parent.width
+                    }
+                }
             }
-            contentItem: Text {
-                color: OD.Tokens.textSoft
-                font.pixelSize: 13
-                font.weight: Font.DemiBold
-                horizontalAlignment: Text.AlignHCenter
-                text: modeButton.dryPlusWet ? "Dry + Wet" : "Dry / Wet"
-                verticalAlignment: Text.AlignVCenter
+            handle: Rectangle {
+                border.color: wetSlider.pressed ? root.accent : OD.Tokens.selected
+                border.width: 1
+                color: wetSlider.pressed ? root.accent : OD.Tokens.raised
+                height: OD.Tokens.minTouch
+                radius: height / 2
+                width: OD.Tokens.minTouch
+                x: wetSlider.visualPosition * (wetSlider.width - width)
+                y: (wetSlider.height - height) / 2
             }
+        }
+        Text {
+            Layout.preferredWidth: 36
+            color: OD.Tokens.textSoft
+            font.family: OD.Tokens.mono
+            font.pixelSize: 12
+            horizontalAlignment: Text.AlignRight
+            text: Math.round(mix.value * 100)
         }
     }
 }
