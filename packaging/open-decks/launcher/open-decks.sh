@@ -45,4 +45,6 @@ if pgrep -u "$USER" -x plasmashell >/dev/null; then
   ) >/dev/null 2>&1 &
 fi
 
-exec "$DIR/open-decks.AppImage" "${RES[@]}" > "$LOG" 2>&1
+# --new-ui: 0.1.0 and 0.2.0 start the classic Mixxx UI when given no
+# arguments at all (fixed in the app after 0.2.0); harmless otherwise.
+exec "$DIR/open-decks.AppImage" --new-ui "${RES[@]}" > "$LOG" 2>&1

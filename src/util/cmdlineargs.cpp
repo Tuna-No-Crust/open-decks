@@ -57,7 +57,9 @@ CmdlineArgs::CmdlineArgs()
           m_developer(false),
           m_stats(false),
 #ifdef MIXXX_USE_QML
-          m_qml(false),
+          // Open Decks: the touch UI is the default, also when parse()
+          // returns early for a launch without arguments.
+          m_qml(true),
 #endif
           m_safeMode(false),
           m_useLegacyVuMeter(false),
