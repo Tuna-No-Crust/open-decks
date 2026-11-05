@@ -86,7 +86,7 @@
                 <description>Caps how much rotation one controller update can add, so a fast flick across the stick can't make the track jump.</description>
             </option>
         </group>
-        <group label="Faders and knobs (hold L2 / R2)">
+        <group label="Faders and EQ (tap X / A / B / Y)">
             <option
                 variable="faderTravelSeconds"
                 type="real"
@@ -96,7 +96,7 @@
                 precision="1"
                 default="0.35"
                 label="Seconds for a full sweep">
-                <description>With L2 or R2 held, a stick pushed all the way moves its fader or knob end to end in this time; smaller pushes move it slower.</description>
+                <description>With a fader or EQ picked, a stick pushed all the way moves its fader or knob end to end in this time; smaller pushes move it slower.</description>
             </option>
             <option
                 variable="faderCurve"
@@ -117,6 +117,26 @@
                 default="80"
                 label="Slam window (ms)">
                 <description>Pushing a stick from rest to the edge faster than this jumps the fader or knob straight to its end (faders to 100 or 0, EQs to kill or neutral). 0 turns slams off.</description>
+            </option>
+            <option
+                variable="pickHoldMs"
+                type="integer"
+                min="300"
+                max="10000"
+                default="1500"
+                label="Pick lasts (ms)">
+                <description>After tapping X (fader) or A / B / Y (low / mid / high EQ) the sticks move that control instead of the jog. Once both sticks have been back at rest this long, they are jogs again.</description>
+            </option>
+        </group>
+        <group label="Cue (L1 / R1)">
+            <option
+                variable="cueHoldMs"
+                type="integer"
+                min="0"
+                max="1000"
+                default="250"
+                label="Hold to cue a playing deck (ms)">
+                <description>On a playing deck a bumper only cues (back to the cue point, stopped) after being held this long, so brushing it does nothing. A stopped deck cues on the press. 0 = cue on the press always.</description>
             </option>
         </group>
         <group label="Touchpads (FX pads)">

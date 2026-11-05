@@ -3,7 +3,8 @@ import QtQuick 2.12
 import "." as OD
 
 // One channel of the mixer: a touch fader at the outer edge, and beside it
-// the readouts of what the controller's stick layers drive (EQ, filter, FX).
+// the readouts of the EQ, filter and FX. Whatever the gamepad's sticks are
+// armed for (fader, EQ bands) lights up in the deck colour.
 Item {
     id: root
 
@@ -38,6 +39,7 @@ Item {
         anchors.right: root.faderOuterLeft ? undefined : parent.right
         group: root.group
         height: parent.height
+        picked: OD.UiState.picked(8)
         width: OD.Tokens.layout.wFader
     }
     Column {
@@ -56,9 +58,9 @@ Item {
             verticalAlignment: Text.AlignVCenter
             width: parent.width
         }
-        OD.Readout { group: root.eqGroup; key: "parameter3"; label: "HIGH" }
-        OD.Readout { group: root.eqGroup; key: "parameter2"; label: "MID" }
-        OD.Readout { group: root.eqGroup; key: "parameter1"; label: "LOW" }
+        OD.Readout { accent: root.accent; group: root.eqGroup; key: "parameter3"; label: "HIGH"; picked: OD.UiState.picked(4) }
+        OD.Readout { accent: root.accent; group: root.eqGroup; key: "parameter2"; label: "MID"; picked: OD.UiState.picked(2) }
+        OD.Readout { accent: root.accent; group: root.eqGroup; key: "parameter1"; label: "LOW"; picked: OD.UiState.picked(1) }
         OD.Readout {
             group: "[QuickEffectRack1_" + root.group + "]"
             key: "super1"

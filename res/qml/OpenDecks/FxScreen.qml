@@ -119,6 +119,7 @@ ColumnLayout {
                                         Layout.fillHeight: true
                                         accent: channel.accent
                                         group: "[Channel" + channel.deckNumber + "]"
+                                        picked: OD.UiState.picked(8)
                                     }
                                     Text {
                                         Layout.alignment: Qt.AlignHCenter

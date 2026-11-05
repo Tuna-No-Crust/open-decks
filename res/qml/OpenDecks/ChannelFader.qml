@@ -12,6 +12,8 @@ Slider {
     required property string group
     property string key: "volume"
     required property color accent
+    // Lit while the gamepad's sticks are armed for the channel faders.
+    property bool picked: false
 
     // Pressed and still = selected; once it moves it is engaged (deck hue).
     property bool moving: false
@@ -47,7 +49,7 @@ Slider {
 
     background: Item {
         Rectangle {
-            color: OD.Tokens.edge
+            color: root.picked ? root.accent : OD.Tokens.edge
             height: parent.height
             width: OD.Tokens.b2
             x: parent.width / 2 - OD.Tokens.b1
@@ -68,8 +70,8 @@ Slider {
         }
     }
     handle: Rectangle {
-        border.color: root.moving ? root.accent : (root.pressed ? OD.Tokens.textSecondary : OD.Tokens.edge)
-        border.width: OD.Tokens.b1
+        border.color: root.moving || root.picked ? root.accent : (root.pressed ? OD.Tokens.textSecondary : OD.Tokens.edge)
+        border.width: root.picked ? OD.Tokens.b2 : OD.Tokens.b1
         color: root.moving ? root.accent : (root.pressed ? OD.Tokens.selected : OD.Tokens.raised)
         height: OD.Tokens.layout.hHandle
         radius: OD.Tokens.r.r2

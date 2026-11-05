@@ -15,6 +15,9 @@ Item {
     // "eq": dB of the band's gain, KILL at zero. "filter": bipolar -1..+1.
     // "fx": integer 0..100.
     property string kind: "eq"
+    // Lit while the gamepad's sticks are armed for this control.
+    property bool picked: false
+    property color accent: OD.Tokens.text
     // Overridable, e.g. to show an effect unit as 0 while it is switched off.
     property real level: control.parameter
     readonly property bool bipolar: kind !== "fx"
@@ -54,7 +57,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: tap.pressed ? OD.Tokens.raised : "transparent"
+        color: tap.pressed ? OD.Tokens.raised : (root.picked ? OD.Tokens.selected : "transparent")
 
         Behavior on color {
             ColorAnimation { duration: OD.Tokens.durFast }
@@ -67,7 +70,7 @@ Item {
         width: parent.width
     }
     Text {
-        color: OD.Tokens.textMuted
+        color: root.picked ? root.accent : OD.Tokens.textMuted
         font.capitalization: Font.AllUppercase
         font.family: OD.Tokens.sans
         font.letterSpacing: OD.Tokens.tracking(OD.Tokens.fs.label, OD.Tokens.ls.label)
@@ -92,7 +95,7 @@ Item {
     Rectangle {
         id: bar
 
-        color: OD.Tokens.edge
+        color: root.picked ? root.accent : OD.Tokens.edge
         height: OD.Tokens.b2
         width: parent.width
         y: parent.height - OD.Tokens.s.s2 + OD.Tokens.b1 - OD.Tokens.b2
