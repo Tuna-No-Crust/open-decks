@@ -91,18 +91,19 @@ mount -b /dev/sdX1 -o ro`) and press *Refresh* in the Library.
 
 ## Controls (Steam Deck, default mapping)
 
+Controls follow the screen. On **Perform** and **FX**:
+
 | Control | Deck 1 (left) | Deck 2 (right) |
 |---|---|---|
 | Stick turn / click | jog / **play** | jog / **play** |
-| Stick straight up/down (no modifier) | channel fader | channel fader |
-| L1 / R1 | cue; tap while the stick holds the platter = set cue | same |
-| A / B / Y | pick low / mid / high EQ band (both decks) | |
-| L2 + stick | ↕ picked band (slam down = kill, up = neutral), ↔ filter | same |
-| D-pad left / X | FX unit on/off | |
+| L1 / R1 | cue (hold ¼ s on a playing deck); tap while the stick holds the platter = set cue | same |
+| X / A / B / Y | arm the sticks: channel fader / low / mid / high EQ (press two together for both); each stick's up/down then moves its own deck's pick (slam down = kill / off). Back to jog once both sticks rest 1.5 s | |
 | Trackpad | FX XY pad deck 1 | FX XY pad deck 2 |
-| Options + D-pad | ↑↓ browse the library, ←→ load to deck 1 / 2 | |
-| Back (Create) | load to an empty, else a stopped deck | |
-| L1 / R1 with the top bar focused | previous / next tab | |
+| Create / Options | previous / next screen (on every screen) | |
+
+On **Library** and **Settings**: left stick or D-pad ↑↓ = tracks, right stick
+↑↓ = playlists, L1 / R1 = load to deck 1 / 2, A = load to an empty, else a
+stopped deck. Jog, faders and FX do nothing there.
 
 Hot cues, loops, sync, vinyl mode, key lock, tempo, PFL, mixer and FX are
 on the touchscreen. Every binding is in `Gamepad-DJ-scripts.js`; the jog
