@@ -14,7 +14,7 @@ ApplicationWindow {
     readonly property int designWidth: 1280
     readonly property int designHeight: 800
 
-    color: Theme.backgroundColor
+    color: OD.Tokens.ground
     title: "Open Decks"
     height: isMobile ? Screen.height : designHeight
     menuBar: content.item ? content.item.menuBar : null
@@ -62,10 +62,12 @@ ApplicationWindow {
             }
         }
     }
+    // Startup splash: the Open Decks mark, name and a loading line in the
+    // deck colours, until the touch UI is ready (then fades out).
     Rectangle {
         id: splash
         visible: opacity > 0
-        color: Theme.backgroundColor
+        color: OD.Tokens.ground
         anchors.fill: parent
 
         property bool ready: false
@@ -79,9 +81,8 @@ ApplicationWindow {
                 when: splash.ready && content.status != Loader.Ready
 
                 PropertyChanges {
-                    text.opacity: 1
-                    logo.opacity: 1
-                    logo.y: root.height / 2 - logo.height / 2
+                    brand.opacity: 1
+                    brand.anchors.verticalCenterOffset: 0
                 }
             },
             State {
@@ -92,41 +93,80 @@ ApplicationWindow {
                 }
             }
         ]
-        Image {
-            id: logo
-            anchors.horizontalCenter: parent.horizontalCenter
-            source: "qrc:/images/mixxx-icon-logo-symbolic.svg"
-            // height: 64
+
+        Column {
+            id: brand
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: 24
             opacity: 0
-            y: root.height / 2
+            spacing: 20
 
             Behavior on opacity {
-                NumberAnimation { duration: 1500; easing.type: Easing.InOutQuad }
+                NumberAnimation { duration: 600; easing.type: Easing.OutQuad }
+            }
+            Behavior on anchors.verticalCenterOffset {
+                NumberAnimation { duration: 600; easing.type: Easing.OutQuad }
             }
 
-            Behavior on y {
-                NumberAnimation { duration: 1500; easing.type: Easing.InOutQuad }
+            Image {
+                anchors.horizontalCenter: parent.horizontalCenter
+                height: 112
+                source: "OpenDecks/images/logo.svg"
+                sourceSize.height: 224
+                sourceSize.width: 224
+                width: 112
             }
-        }
-        Text {
-            id: text
-            opacity: 0
-            y: logo.y + logo.height*2
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.topMargin: 20
-            font.pixelSize: 12
-            color: Theme.lightGray3
-            text: "DJ your way"
-            Behavior on opacity {
-                SequentialAnimation {
-                    PauseAnimation { duration: 1000 }
-                    NumberAnimation { duration: 500; easing.type: Easing.InOutQuad }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                color: OD.Tokens.text
+                font.family: OD.Tokens.sans
+                font.letterSpacing: OD.Tokens.tracking(32, OD.Tokens.ls.title)
+                font.pixelSize: 32
+                font.weight: OD.Tokens.fw.semibold
+                text: "Open Decks"
+            }
+            // Indeterminate loading line: a short segment sweeping a thin
+            // track, blue on the way out, orange on the way back.
+            Rectangle {
+                id: track
+                anchors.horizontalCenter: parent.horizontalCenter
+                clip: true
+                color: OD.Tokens.raised
+                height: 3
+                radius: 1.5
+                width: 160
+
+                Rectangle {
+                    id: sweep
+                    color: OD.Tokens.deck1
+                    height: parent.height
+                    radius: parent.radius
+                    width: 48
+                    x: -width
+
+                    SequentialAnimation on x {
+                        loops: Animation.Infinite
+                        running: splash.visible
+                        PropertyAction { target: sweep; property: "color"; value: OD.Tokens.deck1 }
+                        NumberAnimation { from: -sweep.width; to: track.width; duration: 900; easing.type: Easing.InOutQuad }
+                        PropertyAction { target: sweep; property: "color"; value: OD.Tokens.deck2 }
+                        NumberAnimation { from: track.width; to: -sweep.width; duration: 900; easing.type: Easing.InOutQuad }
+                    }
                 }
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                color: OD.Tokens.textMuted
+                font.capitalization: Font.AllUppercase
+                font.family: OD.Tokens.mono
+                font.letterSpacing: OD.Tokens.tracking(12, OD.Tokens.ls.label)
+                font.pixelSize: 12
+                text: "Loading"
             }
         }
 
         Behavior on opacity {
-            NumberAnimation { duration: 500; easing.type: Easing.InOutQuad }
+            NumberAnimation { duration: 400; easing.type: Easing.InOutQuad }
         }
     }
 }
